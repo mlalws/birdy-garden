@@ -92,7 +92,7 @@ body {
 
 .tree {
   position: absolute;
-  left: 52%;
+  left: 46%;
   bottom: 132px;
   width: 145px;
   height: 225px;
@@ -124,7 +124,7 @@ body {
 
 .lake {
   position: absolute;
-  left: 11%;
+  left: 39%;
   bottom: 70px;
   width: 218px;
   height: 98px;
@@ -137,6 +137,7 @@ body {
   position: absolute;
   transform: translate(-50%, -50%);
   z-index: 4;
+  display: block;
 }
 
 .menu-drawer {

@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type PlacedBird = {
   id: string;
   xPercent: number;
   yPercent: number;
   size: number;
-  emoji: string;
 };
 
 type MenuItem = {
@@ -16,20 +16,21 @@ type MenuItem = {
 };
 
 const DECORATION_BIRDS: PlacedBird[] = [
-  { id: "t1", xPercent: 62, yPercent: 24, size: 20, emoji: "🐦" },
-  { id: "t2", xPercent: 71, yPercent: 22, size: 18, emoji: "🐦" },
-  { id: "t3", xPercent: 56, yPercent: 30, size: 22, emoji: "🐦" },
-  { id: "t4", xPercent: 67, yPercent: 35, size: 20, emoji: "🐦" },
-  { id: "l1", xPercent: 33, yPercent: 74, size: 24, emoji: "🦆" },
-  { id: "l2", xPercent: 21, yPercent: 78, size: 24, emoji: "🦆" },
-  { id: "l3", xPercent: 44, yPercent: 76, size: 29, emoji: "🪽" },
-  { id: "g1", xPercent: 81, yPercent: 70, size: 18, emoji: "🐦" },
-  { id: "g2", xPercent: 87, yPercent: 82, size: 19, emoji: "🐦" },
+  { id: "t1", xPercent: 62, yPercent: 24, size: 20 },
+  { id: "t2", xPercent: 71, yPercent: 22, size: 18 },
+  { id: "t3", xPercent: 56, yPercent: 30, size: 22 },
+  { id: "t4", xPercent: 67, yPercent: 35, size: 20 },
+  { id: "l1", xPercent: 33, yPercent: 74, size: 24 },
+  { id: "l2", xPercent: 21, yPercent: 78, size: 24 },
+  { id: "l3", xPercent: 44, yPercent: 76, size: 29 },
+  { id: "g1", xPercent: 81, yPercent: 70, size: 18 },
+  { id: "g2", xPercent: 87, yPercent: 82, size: 19 },
 ];
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const menuItems = useMemo<MenuItem[]>(
     () => [
       { label: "캘린더", icon: "📅" },
@@ -40,30 +41,41 @@ export default function Home() {
     []
   );
 
+  useEffect(() => {
+    const scrollElement = scrollRef.current;
+
+    if (!scrollElement) {
+      return;
+    }
+
+    // 처음 진입 시 나무/호수가 있는 중앙 영역이 보이도록 시작 위치를 설정합니다.
+    scrollElement.scrollLeft = (scrollElement.scrollWidth - scrollElement.clientWidth) / 2;
+  }, []);
+
   return (
     <main className="garden-page">
       <section className="phone-frame">
-        <div className="garden-scroll">
-          <div className="garden-world">
-            <button
-              type="button"
-              className={`menu-drawer ${isMenuOpen ? "open" : "closed"}`}
-              onClick={() => setIsMenuOpen((prev) => !prev)}
-              aria-label="메뉴 열기 또는 닫기"
-            >
-              <div className="menu-panel">
-                {menuItems.map((item) => (
-                  <span key={item.label} className="menu-item">
-                    <span className="menu-item-icon">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </span>
-                ))}
-              </div>
-              <div className="menu-handle">
-                <span className="menu-arrow">{isMenuOpen ? "◀" : "▶"}</span>
-              </div>
-            </button>
+        <button
+          type="button"
+          className={`menu-drawer ${isMenuOpen ? "open" : "closed"}`}
+          onClick={() => setIsMenuOpen((prev) => !prev)}
+          aria-label="메뉴 열기 또는 닫기"
+        >
+          <div className="menu-panel">
+            {menuItems.map((item) => (
+              <span key={item.label} className="menu-item">
+                <span className="menu-item-icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </span>
+            ))}
+          </div>
+          <div className="menu-handle">
+            <span className="menu-arrow">{isMenuOpen ? "◀" : "▶"}</span>
+          </div>
+        </button>
 
+        <div className="garden-scroll" ref={scrollRef}>
+          <div className="garden-world">
             <div className="tree" aria-hidden />
             <div className="lake" aria-hidden />
             <div className="hill" aria-hidden />
@@ -77,10 +89,11 @@ export default function Home() {
                 style={{
                   left: `${bird.xPercent}%`,
                   top: `${bird.yPercent}%`,
-                  fontSize: `${bird.size}px`,
+                  width: `${bird.size}px`,
+                  height: `${bird.size}px`,
                 }}
               >
-                {bird.emoji}
+                <Image src="/test.png" alt="청둥오리" fill sizes="32px" />
               </span>
             ))}
           </div>
