@@ -1,0 +1,360 @@
+@import "tailwindcss";
+
+:root {
+  --background: #c7e8f9;
+  --foreground: #57361f;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #c7e8f9;
+    --foreground: #57361f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+.garden-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to bottom, #c3e8f9 0%, #cfeef9 42%, #c6e897 100%);
+  padding: 20px;
+}
+
+.phone-frame {
+  width: min(286px, 100%);
+  height: 558px;
+  position: relative;
+  border: 2px solid #2c2c2c;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #bfe2f5;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
+}
+
+.garden-scroll {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+}
+
+.garden-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.garden-scroll::-webkit-scrollbar-thumb {
+  background: rgba(125, 99, 66, 0.45);
+  border-radius: 999px;
+}
+
+.garden-world {
+  position: relative;
+  width: 860px;
+  height: 100%;
+  min-height: 0;
+  scroll-snap-align: start;
+  background: linear-gradient(to bottom, #b7e0f6 0%, #cdeaf8 42%, #bfe086 72%, #add06e 100%);
+}
+
+.hill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 82px;
+  margin: 0 auto;
+  width: 100%;
+  height: 155px;
+  background: radial-gradient(circle at 30% 70%, #cae59a, #afd372 70%);
+  border-top-left-radius: 42%;
+  border-top-right-radius: 46%;
+}
+
+.tree {
+  position: absolute;
+  left: 52%;
+  bottom: 132px;
+  width: 145px;
+  height: 225px;
+  background: transparent;
+}
+
+.tree::before {
+  content: "";
+  position: absolute;
+  left: 54px;
+  bottom: 0;
+  width: 24px;
+  height: 118px;
+  border-radius: 16px;
+  background: #845539;
+}
+
+.tree::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 140px;
+  height: 118px;
+  border-radius: 50% 55% 48% 52%;
+  background: #8dbf67;
+  box-shadow: -40px 20px 0 0 #97c86e, 40px 23px 0 0 #8dbf65, 0 48px 0 0 #86b85f;
+}
+
+.lake {
+  position: absolute;
+  left: 11%;
+  bottom: 70px;
+  width: 218px;
+  height: 98px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 28% 32%, #8ce0f2, #56b9d2 74%);
+  border: 2px solid #5aaac0;
+}
+
+.bird {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+}
+
+.menu-drawer {
+  position: absolute;
+  top: 20px;
+  left: 0;
+  z-index: 7;
+  display: flex;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.menu-panel {
+  width: 92px;
+  min-height: 208px;
+  border: 2px solid #b0845e;
+  border-right: 0;
+  border-radius: 0 0 12px 0;
+  background: #f6dcc4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  box-shadow: 1px 3px 8px rgba(98, 64, 38, 0.15);
+}
+
+.menu-item {
+  color: #6b4425;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-item-icon {
+  width: 20px;
+  height: 20px;
+  border: 1px solid #b0845e;
+  border-radius: 999px;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  background: #fbe9d8;
+}
+
+.menu-handle {
+  width: 24px;
+  height: 60px;
+  margin-top: 22px;
+  border: 2px solid #b0845e;
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+  background: #f6dcc4;
+  display: grid;
+  place-items: center;
+  color: #6b4425;
+  font-size: 16px;
+}
+
+.menu-drawer.closed {
+  transform: translateX(-92px);
+  transition: transform 0.22s ease;
+}
+
+.menu-drawer.open {
+  transform: translateX(0);
+  transition: transform 0.22s ease;
+}
+
+.add-bird-button {
+  height: 78px;
+  border: 0;
+  border-top: 2px solid #6e4a2d;
+  background: #a97b56;
+  color: #fff9f4;
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cloud {
+  position: absolute;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(238, 246, 252, 0.9);
+  z-index: 1;
+}
+
+.cloud::before,
+.cloud::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(238, 246, 252, 0.9);
+}
+
+.cloud-a {
+  width: 74px;
+  left: 52%;
+  top: 16px;
+}
+
+.cloud-a::before {
+  width: 26px;
+  height: 18px;
+  left: 8px;
+  top: -10px;
+}
+
+.cloud-a::after {
+  width: 30px;
+  height: 20px;
+  right: 10px;
+  top: -12px;
+}
+
+.cloud-b {
+  width: 56px;
+  left: 71%;
+  top: 42px;
+}
+
+.cloud-b::before {
+  width: 22px;
+  height: 16px;
+  left: 6px;
+  top: -8px;
+}
+
+.cloud-b::after {
+  width: 24px;
+  height: 17px;
+  right: 8px;
+  top: -9px;
+}
+
+.add-sheet-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(16, 12, 8, 0.36);
+  display: flex;
+  align-items: flex-end;
+}
+
+.add-sheet {
+  width: 100%;
+  background: #fff6ea;
+  border-top: 2px solid #8f6644;
+  border-radius: 20px 20px 0 0;
+  padding: 16px 16px 20px;
+  position: relative;
+  animation: sheet-up 0.2s ease;
+}
+
+.add-sheet-close {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  border: 0;
+  background: transparent;
+  color: #6b4425;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.add-sheet-title {
+  margin: 8px 0 8px;
+  color: #6b4425;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.add-sheet-description {
+  margin: 0;
+  color: #7b5333;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.add-sheet-action {
+  margin-top: 14px;
+  width: 100%;
+  height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: #a97b56;
+  color: #fff9f4;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 500px) {
+  .phone-frame {
+    width: 100%;
+    height: 100dvh;
+    max-height: 700px;
+  }
+
+  .add-bird-button {
+    font-size: 30px;
+  }
+
+  .add-sheet-title {
+    font-size: 20px;
+  }
+}
