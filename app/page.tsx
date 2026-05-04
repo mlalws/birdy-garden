@@ -235,7 +235,16 @@ export default function Home() {
           <div className="bird-list-screen" role="dialog" aria-modal="true" aria-label="조류 목록">
             <header className="bird-list-header">
               <button type="button" className="bird-list-close" onClick={closeBirdList} aria-label="목록 닫기">
-                <Image src="/x.png" alt="" width={48} height={48} className="bird-list-close-img" />
+                <Image
+                  src="/x.png"
+                  alt=""
+                  width={48}
+                  height={48}
+                  priority
+                  unoptimized
+                  sizes="32px"
+                  className="bird-list-close-img"
+                />
               </button>
               <button
                 type="button"
@@ -304,7 +313,16 @@ export default function Home() {
                 onClick={backFromBirdFormToList}
                 aria-label="조류 목록으로 돌아가기"
               >
-                <Image src="/left.png" alt="" width={96} height={96} className="bird-form-back-img" />
+                <Image
+                  src="/left.png"
+                  alt=""
+                  width={96}
+                  height={96}
+                  priority
+                  unoptimized
+                  sizes="44px"
+                  className="bird-form-back-img"
+                />
               </button>
               <span className="bird-form-header-title">조류 등록</span>
             </header>
