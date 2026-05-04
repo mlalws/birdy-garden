@@ -90,27 +90,30 @@ body {
 
 .menu-drawer {
   --menu-surface: #FDEBD0;
+  --menu-border: #5a3d2e;
   position: absolute;
   top: 20px;
   left: 0;
   z-index: 7;
   display: flex;
   align-items: center;
-  border: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--menu-border);
+  border-left: none;
+  border-radius: 0 9px 9px 0;
   padding: 0;
-  background: transparent;
+  background: var(--menu-surface);
   cursor: pointer;
   box-shadow: none;
   filter: none;
 }
 
-/* Figma: flat pale peach bar + rounded tab, no stroke/shadow */
 .menu-panel {
   width: 44px;
   box-sizing: border-box;
-  padding: 16px 3px 16px 4px;
+  padding: 16px 4px 16px 3px;
   border: none;
-  border-radius: 22px 0 0 22px;
+  border-radius: 0 9px 9px 0;
   background: var(--menu-surface);
   display: flex;
   flex-direction: column;
@@ -162,7 +165,7 @@ body {
   justify-content: center;
   border: none;
   background: var(--menu-surface);
-  border-radius: 0 11px 11px 0;
+  border-radius: 0 8px 8px 0;
   box-shadow: none;
 }
 
