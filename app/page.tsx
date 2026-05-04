@@ -77,6 +77,15 @@ export default function Home() {
     scrollElement.scrollLeft = (scrollElement.scrollWidth - scrollElement.clientWidth) / 2;
   }, []);
 
+  useEffect(() => {
+    const warm = (src: string) => {
+      const img = new Image();
+      img.src = src;
+    };
+    warm("/x.png");
+    warm("/left.png");
+  }, []);
+
   const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
@@ -183,6 +192,12 @@ export default function Home() {
   return (
     <main className="garden-page">
       <section className="phone-frame">
+        <div className="bird-chrome-preload" aria-hidden="true">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/x.png" alt="" width={48} height={48} decoding="async" fetchPriority="high" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/left.png" alt="" width={48} height={48} decoding="async" fetchPriority="high" />
+        </div>
         <button
           type="button"
           className={`menu-drawer ${isMenuOpen ? "open" : "closed"}`}
@@ -315,8 +330,8 @@ export default function Home() {
                 <img
                   src="/left.png"
                   alt=""
-                  width={56}
-                  height={50}
+                  width={48}
+                  height={48}
                   decoding="sync"
                   fetchPriority="high"
                   className="bird-form-back-img"
@@ -449,7 +464,25 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+
+              <div className="bird-map-section">
+                <h3 className="bird-map-title">발견 장소 설정</h3>
+                <div className="bird-map-frame">
+                  <iframe
+                    title="발견 장소 지도"
+                    src="https://www.openstreetmap.org/export/embed.html?bbox=127.02%2C37.51%2C127.06%2C37.54&layer=mapnik"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              </div>
             </div>
+
+            <footer className="bird-form-footer">
+              <button type="button" className="bird-form-submit">
+                추가하기
+              </button>
+            </footer>
           </div>
         ) : null}
       </section>
