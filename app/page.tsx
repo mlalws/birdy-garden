@@ -154,19 +154,22 @@ export default function Home() {
               </span>
             ))}
           </div>
-          <div className="menu-handle">
+          <div className="menu-handle" aria-hidden>
+            <svg className="menu-handle-shape" viewBox="0 0 20 66" preserveAspectRatio="none" focusable="false">
+              <path d="M0,14 L20,0 L20,66 L0,52 Z" className="menu-handle-fill" />
+              <path
+                d="M0,14 L20,0 M20,0 L20,66 M20,66 L0,52"
+                className="menu-handle-stroke"
+                fill="none"
+                vectorEffect="nonScalingStroke"
+              />
+            </svg>
             <span className="menu-arrow">{isMenuOpen ? "◀" : "▶"}</span>
           </div>
         </button>
 
         <div className="garden-scroll" ref={scrollRef}>
           <div className="garden-world">
-            <div className="tree" aria-hidden />
-            <div className="lake" aria-hidden />
-            <div className="hill" aria-hidden />
-            <div className="cloud cloud-a" aria-hidden />
-            <div className="cloud cloud-b" aria-hidden />
-
             {DECORATION_BIRDS.map((bird) => (
               <span
                 key={bird.id}
