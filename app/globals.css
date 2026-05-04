@@ -99,7 +99,7 @@ body {
 
 .menu-drawer {
   --menu-surface: #FDEBD0;
-  --menu-border: #5a3d2e;
+  --menu-border: #c9a98e;
   position: absolute;
   top: 20px;
   left: 0;
@@ -107,9 +107,9 @@ body {
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  border: 1px solid var(--menu-border);
+  border: 3px solid var(--menu-border);
   border-left: none;
-  border-radius: 0 9px 9px 0;
+  border-radius: 0 12px 12px 0;
   padding: 0;
   background: var(--menu-surface);
   cursor: pointer;
@@ -118,11 +118,11 @@ body {
 }
 
 .menu-panel {
-  width: 44px;
+  width: 46px;
   box-sizing: border-box;
-  padding: 16px 4px 16px 3px;
+  padding: 16px 5px 16px 4px;
   border: none;
-  border-radius: 0 9px 9px 0;
+  border-radius: 0 10px 10px 0;
   background: var(--menu-surface);
   display: flex;
   flex-direction: column;
@@ -166,15 +166,15 @@ body {
 
 .menu-handle {
   flex: 0 0 auto;
-  width: 9px;
-  height: 26px;
-  margin-left: -1px;
+  width: 11px;
+  height: 30px;
+  margin-left: -2px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
   background: var(--menu-surface);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 9px 9px 0;
   box-shadow: none;
 }
 
@@ -187,19 +187,19 @@ body {
 }
 
 .menu-arrow--left {
-  border-top: 3px solid transparent;
-  border-bottom: 3px solid transparent;
-  border-right: 5px solid #2d2d2d;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-right: 6px solid #1f1f1f;
 }
 
 .menu-arrow--right {
-  border-top: 3px solid transparent;
-  border-bottom: 3px solid transparent;
-  border-left: 5px solid #2d2d2d;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid #1f1f1f;
 }
 
 .menu-drawer.closed {
-  transform: translateX(-44px);
+  transform: translateX(-46px);
   transition: transform 0.22s ease;
 }
 
@@ -267,9 +267,9 @@ body {
 
 .bird-list-close-img {
   display: block;
-  width: 26px;
+  width: 32px;
   height: auto;
-  max-height: 32px;
+  max-height: 40px;
   object-fit: contain;
 }
 
@@ -431,9 +431,9 @@ body {
 
 .bird-form-back-img {
   display: block;
-  height: 28px;
+  height: 34px;
   width: auto;
-  max-width: 40px;
+  max-width: 48px;
   object-fit: contain;
 }
 
