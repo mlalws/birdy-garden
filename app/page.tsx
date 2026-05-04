@@ -77,8 +77,7 @@ export default function Home() {
     scrollElement.scrollLeft = (scrollElement.scrollWidth - scrollElement.clientWidth) / 2;
   }, []);
 
-  const closeBirdInfoScreen = () => {
-    setIsBirdInfoScreenOpen(false);
+  const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
     setBirdName("청둥오리");
@@ -90,6 +89,13 @@ export default function Home() {
       }
       return null;
     });
+  };
+
+  const backFromBirdFormToList = () => {
+    setIsBirdInfoScreenOpen(false);
+    resetBirdFormDraft();
+    setIsBirdListOpen(true);
+    setSelectedListBirdId("mallard");
   };
 
   const openBirdList = () => {
@@ -229,7 +235,7 @@ export default function Home() {
           <div className="bird-list-screen" role="dialog" aria-modal="true" aria-label="조류 목록">
             <header className="bird-list-header">
               <button type="button" className="bird-list-close" onClick={closeBirdList} aria-label="목록 닫기">
-                ✕
+                <Image src="/x.png" alt="" width={48} height={48} className="bird-list-close-img" />
               </button>
               <button
                 type="button"
@@ -292,10 +298,15 @@ export default function Home() {
         {isBirdInfoScreenOpen ? (
           <div className="bird-form-screen" role="dialog" aria-modal="true" aria-label="조류 등록">
             <header className="bird-form-header">
-              <span className="bird-form-header-title">조류 등록</span>
-              <button type="button" className="bird-form-close" onClick={closeBirdInfoScreen} aria-label="입력 화면 닫기">
-                ✕
+              <button
+                type="button"
+                className="bird-form-back"
+                onClick={backFromBirdFormToList}
+                aria-label="조류 목록으로 돌아가기"
+              >
+                <Image src="/left.png" alt="" width={96} height={96} className="bird-form-back-img" />
               </button>
+              <span className="bird-form-header-title">조류 등록</span>
             </header>
 
             <input

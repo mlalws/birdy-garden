@@ -166,15 +166,15 @@ body {
 
 .menu-handle {
   flex: 0 0 auto;
-  width: 13px;
-  height: 36px;
+  width: 9px;
+  height: 26px;
   margin-left: -1px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
   background: var(--menu-surface);
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 6px 6px 0;
   box-shadow: none;
 }
 
@@ -187,15 +187,15 @@ body {
 }
 
 .menu-arrow--left {
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-right: 6px solid #2d2d2d;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-right: 5px solid #2d2d2d;
 }
 
 .menu-arrow--right {
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 6px solid #2d2d2d;
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  border-left: 5px solid #2d2d2d;
 }
 
 .menu-drawer.closed {
@@ -255,15 +255,22 @@ body {
 }
 
 .bird-list-close {
-  width: 40px;
-  height: 40px;
+  padding: 0;
+  margin: 0;
   border: none;
-  border-radius: 10px;
-  background: #ffd6dc;
-  color: #8a4a58;
-  font-size: 18px;
-  line-height: 1;
+  background: transparent;
+  line-height: 0;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+}
+
+.bird-list-close-img {
+  display: block;
+  width: 26px;
+  height: auto;
+  max-height: 32px;
+  object-fit: contain;
 }
 
 .bird-list-add-unlisted {
@@ -401,42 +408,41 @@ body {
 
 .bird-form-header {
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
   align-items: center;
-  justify-content: center;
-  position: relative;
   padding: 10px 12px;
   border-bottom: 1px solid rgba(139, 94, 60, 0.35);
   background: rgba(255, 248, 236, 0.92);
 }
 
-.bird-form-header-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #3f2615;
-}
-
-.bird-form-close {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: 0;
+.bird-form-back {
+  grid-column: 1;
+  justify-self: start;
+  padding: 0;
+  margin: 0;
+  border: none;
   background: transparent;
-  color: #5a3a22;
-  font-size: 20px;
-  line-height: 1;
+  line-height: 0;
   cursor: pointer;
-  padding: 6px 8px;
   -webkit-tap-highlight-color: transparent;
   appearance: none;
 }
 
-.bird-form-close:focus,
-.bird-form-close:focus-visible,
-.bird-form-close:active {
-  outline: none;
-  box-shadow: none;
+.bird-form-back-img {
+  display: block;
+  height: 28px;
+  width: auto;
+  max-width: 40px;
+  object-fit: contain;
+}
+
+.bird-form-header-title {
+  grid-column: 2;
+  font-size: 16px;
+  font-weight: 700;
+  color: #3f2615;
+  text-align: center;
 }
 
 .bird-form-scroll {
