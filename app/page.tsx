@@ -238,8 +238,8 @@ export default function Home() {
                 <img
                   src="/x.png"
                   alt=""
-                  width={40}
-                  height={40}
+                  width={48}
+                  height={48}
                   decoding="sync"
                   fetchPriority="high"
                   className="bird-list-close-img"
@@ -316,13 +316,14 @@ export default function Home() {
                   src="/left.png"
                   alt=""
                   width={56}
-                  height={42}
+                  height={50}
                   decoding="sync"
                   fetchPriority="high"
                   className="bird-form-back-img"
                 />
               </button>
               <span className="bird-form-header-title">조류 등록</span>
+              <span className="bird-form-header-spacer" aria-hidden />
             </header>
 
             <input
