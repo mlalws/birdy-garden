@@ -1,138 +1,138 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-function MenuIconCalendar() {
-  return (
-    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
-      <rect x="6" y="8" width="24" height="22" rx="3" fill="#fff" stroke="#c4c4c4" strokeWidth="1" />
-      <rect x="6" y="8" width="24" height="7" rx="3" fill="#e85c4a" />
-      <path d="M10 6v4M18 6v4M26 6v4" stroke="#8a8a8a" strokeWidth="1.5" strokeLinecap="round" />
-      <polygon points="22,16 24,20 20,20" fill="#f4c430" />
-    </svg>
-  );
-}
+type PlacedBird = {
+  id: string;
+  xPercent: number;
+  yPercent: number;
+  size: number;
+};
 
-function MenuIconBook() {
-  return (
-    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
-      <rect x="8" y="7" width="20" height="24" rx="2" fill="#5cb85c" stroke="#3d8f3d" strokeWidth="1" />
-      <ellipse cx="18" cy="16" rx="6" ry="4" fill="#e8f5e9" />
-      <path d="M14 20 Q18 23 22 20" stroke="#2e7d32" strokeWidth="1.2" fill="none" />
-    </svg>
-  );
-}
+type MenuItem = {
+  label: string;
+  icon: string;
+};
 
-function MenuIconMedal() {
-  return (
-    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
-      <circle cx="18" cy="15" r="9" fill="#c4956a" stroke="#8d6b47" strokeWidth="1" />
-      <rect x="17.2" y="11" width="1.6" height="7" rx="0.3" fill="#5c3d24" />
-      <path d="M12 24 L10 30 M24 24 L26 30" stroke="#8d6b47" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function MenuIconMap() {
-  return (
-    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden>
-      <path d="M8 10 L16 8 L28 11 L28 26 L16 23 L8 26 Z" fill="#f5e6c8" stroke="#a08060" strokeWidth="1" />
-      <circle cx="20" cy="16" r="3" fill="none" stroke="#c62828" strokeWidth="1.2" />
-      <path d="M20 13 L20 10 M22 17 L25 18" stroke="#c62828" strokeWidth="1" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-const MENU_ITEMS = [
-  { label: "캘린더", Icon: MenuIconCalendar },
-  { label: "도감", Icon: MenuIconBook },
-  { label: "랭킹", Icon: MenuIconMedal },
-  { label: "지도", Icon: MenuIconMap },
-] as const;
+const DECORATION_BIRDS: PlacedBird[] = [
+  { id: "t1", xPercent: 62, yPercent: 24, size: 20 },
+  { id: "t2", xPercent: 71, yPercent: 22, size: 18 },
+  { id: "t3", xPercent: 56, yPercent: 30, size: 22 },
+  { id: "t4", xPercent: 67, yPercent: 35, size: 20 },
+  { id: "l1", xPercent: 33, yPercent: 74, size: 24 },
+  { id: "l2", xPercent: 21, yPercent: 78, size: 24 },
+  { id: "l3", xPercent: 44, yPercent: 76, size: 29 },
+  { id: "g1", xPercent: 81, yPercent: 70, size: 18 },
+  { id: "g2", xPercent: 87, yPercent: 82, size: 19 },
+];
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const menuItems = useMemo<MenuItem[]>(
+    () => [
+      { label: "캘린더", icon: "📅" },
+      { label: "도감", icon: "🪶" },
+      { label: "랭킹", icon: "🏅" },
+      { label: "지도", icon: "🧭" },
+    ],
+    []
+  );
 
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+    const scrollElement = scrollRef.current;
+
+    if (!scrollElement) {
+      return;
+    }
+
+    // 처음 진입 시 나무/호수가 있는 중앙 영역이 보이도록 시작 위치를 설정합니다.
+    scrollElement.scrollLeft = (scrollElement.scrollWidth - scrollElement.clientWidth) / 2;
   }, []);
 
   return (
     <main className="garden-page">
-      <div className="app-shell">
-        <header className="app-header">
-          <p className="app-title">버디 가든</p>
-          <p className="app-subtitle">오늘 만난 새로 채워가는 정원</p>
-        </header>
-
-        <div
-          className={`side-drawer-wrap ${isMenuOpen ? "is-open" : "is-closed"}`}
-          role="presentation"
+      <section className="phone-frame">
+        <button
+          type="button"
+          className={`menu-drawer ${isMenuOpen ? "open" : "closed"}`}
+          onClick={() => setIsMenuOpen((prev) => !prev)}
+          aria-label="메뉴 열기 또는 닫기"
         >
-          <nav
-            id="garden-side-menu"
-            className="side-drawer-panel"
-            aria-label="주요 메뉴"
-            aria-hidden={!isMenuOpen}
-          >
-            {MENU_ITEMS.map(({ label, Icon }) => (
-              <button
-                key={label}
-                type="button"
-                className="side-drawer-item"
-                tabIndex={isMenuOpen ? 0 : -1}
-              >
-                <span className="side-drawer-item-icon" aria-hidden>
-                  <Icon />
-                </span>
-                <span className="side-drawer-item-label">{label}</span>
-              </button>
+          <div className="menu-panel">
+            {menuItems.map((item) => (
+              <span key={item.label} className="menu-item">
+                <span className="menu-item-icon">{item.icon}</span>
+                <span>{item.label}</span>
+              </span>
             ))}
-          </nav>
-          <button
-            type="button"
-            className="side-drawer-tab"
-            onClick={() => setIsMenuOpen((v) => !v)}
-            aria-expanded={isMenuOpen}
-            aria-controls="garden-side-menu"
-            id="garden-menu-toggle"
-          >
-            <span
-              className={`side-drawer-tab-arrow ${isMenuOpen ? "points-left" : "points-right"}`}
-              aria-hidden
-            />
-            <span className="sr-only">{isMenuOpen ? "메뉴 닫기" : "메뉴 열기"}</span>
-          </button>
+          </div>
+          <div className="menu-handle">
+            <span className="menu-arrow">{isMenuOpen ? "◀" : "▶"}</span>
+          </div>
+        </button>
+
+        <div className="garden-scroll" ref={scrollRef}>
+          <div className="garden-world">
+            <div className="tree" aria-hidden />
+            <div className="lake" aria-hidden />
+            <div className="hill" aria-hidden />
+            <div className="cloud cloud-a" aria-hidden />
+            <div className="cloud cloud-b" aria-hidden />
+
+            {DECORATION_BIRDS.map((bird) => (
+              <span
+                key={bird.id}
+                className="bird"
+                style={{
+                  left: `${bird.xPercent}%`,
+                  top: `${bird.yPercent}%`,
+                  width: `${bird.size}px`,
+                  height: `${bird.size}px`,
+                }}
+              >
+                <Image src="/test.png" alt="청둥오리" fill sizes="32px" />
+              </span>
+            ))}
+          </div>
         </div>
 
-        <section className="garden-scroll" ref={scrollRef} aria-label="나만의 정원">
-          <div className="garden-world">
-            <Image
-              src="/garden-panorama.png"
-              alt="하늘과 연못, 나무가 있는 정원 일러스트"
-              fill
-              priority
-              sizes="240vw"
-              className="garden-world-image"
-            />
-          </div>
-        </section>
+        <button
+          type="button"
+          className="add-bird-button"
+          onClick={() => setIsAddSheetOpen(true)}
+        >
+          + 오늘의 새 추가하기
+        </button>
 
-        <footer className="app-footer">
-          <button
-            type="button"
-            className="add-bird-button"
-            disabled
-            aria-label="오늘의 새 추가하기 (준비 중)"
-          >
-            + 오늘의 새 추가하기
-          </button>
-        </footer>
-      </div>
+        {isAddSheetOpen ? (
+          <div className="add-sheet-overlay" onClick={() => setIsAddSheetOpen(false)}>
+            <section
+              className="add-sheet"
+              onClick={(event) => event.stopPropagation()}
+              aria-label="새 추가 메뉴"
+            >
+              <button
+                type="button"
+                className="add-sheet-close"
+                onClick={() => setIsAddSheetOpen(false)}
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+              <h2 className="add-sheet-title">오늘의 새를 기록해볼까요?</h2>
+              <p className="add-sheet-description">
+                다음 단계에서 촬영한 사진, 이름, 발견 위치를 입력해 정원에 새를 추가할 수 있어요.
+              </p>
+              <button type="button" className="add-sheet-action">
+                기록 시작하기
+              </button>
+            </section>
+          </div>
+        ) : null}
+      </section>
     </main>
   );
 }
