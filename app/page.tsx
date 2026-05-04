@@ -238,11 +238,11 @@ export default function Home() {
                 <Image
                   src="/x.png"
                   alt=""
-                  width={48}
-                  height={48}
+                  width={96}
+                  height={96}
                   priority
                   unoptimized
-                  sizes="32px"
+                  sizes="40px"
                   className="bird-list-close-img"
                 />
               </button>
@@ -316,11 +316,11 @@ export default function Home() {
                 <Image
                   src="/left.png"
                   alt=""
-                  width={96}
-                  height={96}
+                  width={128}
+                  height={128}
                   priority
                   unoptimized
-                  sizes="44px"
+                  sizes="56px"
                   className="bird-form-back-img"
                 />
               </button>
