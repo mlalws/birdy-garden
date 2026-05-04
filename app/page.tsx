@@ -186,16 +186,18 @@ export default function Home() {
           <div className="menu-panel">
             {menuItems.map((item) => (
               <span key={item.label} className="menu-item">
-                <span className="menu-item-icon">{item.icon}</span>
-                <span>{item.label}</span>
+                <span className="menu-item-icon" aria-hidden>
+                  {item.icon}
+                </span>
+                <span className="menu-item-label">{item.label}</span>
               </span>
             ))}
           </div>
           <div className="menu-handle" aria-hidden>
-            <svg className="menu-handle-shape" viewBox="0 0 11 28" preserveAspectRatio="none" focusable="false">
-              <path d="M0,0 L11,6 L11,22 L0,28 Z" className="menu-handle-fill" />
+            <svg className="menu-handle-shape" viewBox="0 0 9 26" preserveAspectRatio="none" focusable="false">
+              <path d="M0,0 L9,5 L9,21 L0,26 Z" className="menu-handle-fill" />
               <path
-                d="M0,0 L11,6 M11,6 L11,22 M11,22 L0,28"
+                d="M0,0 L9,5 M9,5 L9,21 M9,21 L0,26"
                 className="menu-handle-stroke"
                 fill="none"
                 vectorEffect="nonScalingStroke"

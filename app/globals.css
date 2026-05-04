@@ -99,51 +99,68 @@ body {
   padding: 0;
   background: transparent;
   cursor: pointer;
+  filter: drop-shadow(0 1px 4px rgba(48, 38, 32, 0.14));
 }
 
 .menu-panel {
-  width: 90px;
-  min-height: 204px;
-  border: 1px solid #b0845e;
-  border-left: none;
-  border-radius: 0 0 10px 0;
-  background: #f6dcc4;
+  --menu-surface: #d9cdbe;
+  --menu-edge: rgba(92, 78, 68, 0.28);
+  width: 46px;
+  box-sizing: border-box;
+  padding: 14px 2px 14px 5px;
+  border: 1px solid var(--menu-edge);
+  border-right: none;
+  border-radius: 999px 0 0 999px;
+  background: var(--menu-surface);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-evenly;
-  box-shadow: 1px 2px 6px rgba(98, 64, 38, 0.12);
+  justify-content: center;
+  gap: 12px;
 }
 
 .menu-item {
-  color: #6b4425;
-  font-size: 15px;
-  font-weight: 600;
+  color: #3d342c;
+  font-size: 0;
+  font-weight: 700;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1.1;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+.menu-item-label {
+  display: block;
+  font-size: 9px;
+  max-width: 100%;
 }
 
 .menu-item-icon {
-  width: 20px;
-  height: 20px;
-  border: 1px solid #b0845e;
-  border-radius: 999px;
-  font-size: 12px;
+  width: auto;
+  height: auto;
+  min-height: 20px;
+  border: none;
+  border-radius: 0;
+  font-size: 16px;
+  line-height: 1;
   display: grid;
   place-items: center;
-  background: #fbe9d8;
+  background: transparent;
 }
 
 .menu-handle {
   position: relative;
   flex: 0 0 auto;
-  width: 11px;
-  height: 28px;
+  width: 9px;
+  height: 26px;
   margin-left: 0;
   display: grid;
   place-items: center;
-  color: #6b4425;
+  color: #2c241e;
   border: none;
   background: transparent;
 }
@@ -157,12 +174,12 @@ body {
 }
 
 .menu-handle-fill {
-  fill: #f6dcc4;
+  fill: #d9cdbe;
 }
 
 .menu-handle-stroke {
-  stroke: #b0845e;
-  stroke-width: 1.05px;
+  stroke: rgba(92, 78, 68, 0.35);
+  stroke-width: 1px;
   stroke-linecap: square;
   stroke-linejoin: miter;
 }
@@ -170,13 +187,13 @@ body {
 .menu-arrow {
   position: relative;
   z-index: 1;
-  font-size: 11px;
+  font-size: 9px;
   line-height: 1;
   pointer-events: none;
 }
 
 .menu-drawer.closed {
-  transform: translateX(-90px);
+  transform: translateX(-46px);
   transition: transform 0.22s ease;
 }
 
