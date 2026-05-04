@@ -15,6 +15,20 @@ type MenuItem = {
   icon: string;
 };
 
+type ListBird = {
+  id: string;
+  name: string;
+  isPlaceholder?: boolean;
+};
+
+const BIRD_LIST_ITEMS: ListBird[] = [
+  { id: "mallard", name: "청둥오리" },
+  { id: "ph1", name: "", isPlaceholder: true },
+  { id: "ph2", name: "", isPlaceholder: true },
+  { id: "ph3", name: "", isPlaceholder: true },
+  { id: "ph4", name: "", isPlaceholder: true },
+];
+
 const DECORATION_BIRDS: PlacedBird[] = [
   { id: "t1", xPercent: 62, yPercent: 24, size: 20 },
   { id: "t2", xPercent: 71, yPercent: 22, size: 18 },
@@ -29,6 +43,8 @@ const DECORATION_BIRDS: PlacedBird[] = [
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isBirdListOpen, setIsBirdListOpen] = useState(false);
+  const [selectedListBirdId, setSelectedListBirdId] = useState<string | null>(null);
   const [isBirdInfoScreenOpen, setIsBirdInfoScreenOpen] = useState(false);
   const [isPhotoPopupOpen, setIsPhotoPopupOpen] = useState(false);
   const [canOpenPhotoPopup, setCanOpenPhotoPopup] = useState(true);
@@ -76,11 +92,24 @@ export default function Home() {
     });
   };
 
-  const openBirdRegistration = () => {
+  const openBirdList = () => {
+    setIsBirdListOpen(true);
+    setSelectedListBirdId("mallard");
+  };
+
+  const closeBirdList = () => {
+    setIsBirdListOpen(false);
+    setSelectedListBirdId(null);
+  };
+
+  const openBirdRegistration = (opts?: { name?: string }) => {
+    const nextName = opts?.name !== undefined ? opts.name : "청둥오리";
+    setIsBirdListOpen(false);
+    setSelectedListBirdId(null);
     setIsBirdInfoScreenOpen(true);
     setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
-    setBirdName("청둥오리");
+    setBirdName(nextName);
     setBirdFeature("");
     setBirdCount(2);
     setPhotoPreviewUrl((prev) => {
@@ -89,6 +118,14 @@ export default function Home() {
       }
       return null;
     });
+  };
+
+  const goNextFromBirdList = () => {
+    const item = BIRD_LIST_ITEMS.find((b) => b.id === selectedListBirdId);
+    if (!item || item.isPlaceholder) {
+      return;
+    }
+    openBirdRegistration({ name: item.name });
   };
 
   const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -155,10 +192,10 @@ export default function Home() {
             ))}
           </div>
           <div className="menu-handle" aria-hidden>
-            <svg className="menu-handle-shape" viewBox="0 0 20 66" preserveAspectRatio="none" focusable="false">
-              <path d="M0,14 L20,0 L20,66 L0,52 Z" className="menu-handle-fill" />
+            <svg className="menu-handle-shape" viewBox="0 0 11 28" preserveAspectRatio="none" focusable="false">
+              <path d="M0,0 L11,6 L11,22 L0,28 Z" className="menu-handle-fill" />
               <path
-                d="M0,14 L20,0 M20,0 L20,66 M20,66 L0,52"
+                d="M0,0 L11,6 M11,6 L11,22 M11,22 L0,28"
                 className="menu-handle-stroke"
                 fill="none"
                 vectorEffect="nonScalingStroke"
@@ -187,9 +224,73 @@ export default function Home() {
           </div>
         </div>
 
-        <button type="button" className="add-bird-button" onClick={openBirdRegistration}>
+        <button type="button" className="add-bird-button" onClick={openBirdList}>
           + 오늘의 새 추가하기
         </button>
+
+        {isBirdListOpen ? (
+          <div className="bird-list-screen" role="dialog" aria-modal="true" aria-label="조류 목록">
+            <header className="bird-list-header">
+              <button type="button" className="bird-list-close" onClick={closeBirdList} aria-label="목록 닫기">
+                ✕
+              </button>
+              <button
+                type="button"
+                className="bird-list-add-unlisted"
+                onClick={() => openBirdRegistration({ name: "" })}
+              >
+                리스트에 없는 조류 추가
+              </button>
+            </header>
+
+            <div className="bird-list-scroll">
+              {BIRD_LIST_ITEMS.map((item) =>
+                item.isPlaceholder ? (
+                  <div key={item.id} className="bird-list-card bird-list-card--placeholder" aria-hidden>
+                    <div className="bird-list-thumb bird-list-thumb--muted">
+                      <span>새 사진</span>
+                    </div>
+                    <div className="bird-list-text">
+                      <span className="bird-list-line bird-list-line--title" />
+                      <span className="bird-list-line" />
+                      <span className="bird-list-line bird-list-line--short" />
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`bird-list-card${selectedListBirdId === item.id ? " bird-list-card--selected" : ""}`}
+                    onClick={() => {
+                      setSelectedListBirdId(item.id);
+                      openBirdRegistration({ name: item.name });
+                    }}
+                  >
+                    <div className="bird-list-thumb">
+                      <span>새 사진</span>
+                    </div>
+                    <div className="bird-list-text">
+                      <span className="bird-list-name">{item.name}</span>
+                      <span className="bird-list-line" />
+                      <span className="bird-list-line bird-list-line--short" />
+                    </div>
+                  </button>
+                )
+              )}
+            </div>
+
+            <footer className="bird-list-footer">
+              <button
+                type="button"
+                className="bird-list-next"
+                onClick={goNextFromBirdList}
+                disabled={!selectedListBirdId || !!BIRD_LIST_ITEMS.find((b) => b.id === selectedListBirdId)?.isPlaceholder}
+              >
+                다음으로
+              </button>
+            </footer>
+          </div>
+        ) : null}
 
         {isBirdInfoScreenOpen ? (
           <div className="bird-form-screen" role="dialog" aria-modal="true" aria-label="조류 등록">
