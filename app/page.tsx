@@ -29,7 +29,6 @@ const DECORATION_BIRDS: PlacedBird[] = [
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
   const [isBirdInfoScreenOpen, setIsBirdInfoScreenOpen] = useState(false);
   const [isPhotoPopupOpen, setIsPhotoPopupOpen] = useState(false);
   const [canOpenPhotoPopup, setCanOpenPhotoPopup] = useState(true);
@@ -77,8 +76,7 @@ export default function Home() {
     });
   };
 
-  const startRecordingFromSheet = () => {
-    setIsAddSheetOpen(false);
+  const openBirdRegistration = () => {
     setIsBirdInfoScreenOpen(true);
     setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
@@ -186,35 +184,9 @@ export default function Home() {
           </div>
         </div>
 
-        <button type="button" className="add-bird-button" onClick={() => setIsAddSheetOpen(true)}>
+        <button type="button" className="add-bird-button" onClick={openBirdRegistration}>
           + 오늘의 새 추가하기
         </button>
-
-        {isAddSheetOpen ? (
-          <div className="add-sheet-overlay" onClick={() => setIsAddSheetOpen(false)}>
-            <section
-              className="add-sheet"
-              onClick={(event) => event.stopPropagation()}
-              aria-label="새 추가 메뉴"
-            >
-              <button
-                type="button"
-                className="add-sheet-close"
-                onClick={() => setIsAddSheetOpen(false)}
-                aria-label="닫기"
-              >
-                ✕
-              </button>
-              <h2 className="add-sheet-title">오늘의 새를 기록해볼까요?</h2>
-              <p className="add-sheet-description">
-                다음 단계에서 사진과 이름, 특징을 입력해 정원에 새를 기록할 수 있어요.
-              </p>
-              <button type="button" className="add-sheet-action" onClick={startRecordingFromSheet}>
-                기록 시작하기
-              </button>
-            </section>
-          </div>
-        ) : null}
 
         {isBirdInfoScreenOpen ? (
           <div className="bird-form-screen" role="dialog" aria-modal="true" aria-label="조류 등록">

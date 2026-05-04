@@ -211,6 +211,9 @@ body {
 }
 
 .add-bird-button {
+  position: relative;
+  z-index: 8;
+  flex: 0 0 auto;
   height: 78px;
   border: 0;
   border-top: 2px solid #6e4a2d;
@@ -276,72 +279,6 @@ body {
   height: 17px;
   right: 8px;
   top: -9px;
-}
-
-.add-sheet-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  background: rgba(16, 12, 8, 0.36);
-  display: flex;
-  align-items: flex-end;
-}
-
-.add-sheet {
-  width: 100%;
-  background: #fff6ea;
-  border-top: 2px solid #8f6644;
-  border-radius: 20px 20px 0 0;
-  padding: 16px 16px 20px;
-  position: relative;
-  animation: sheet-up 0.2s ease;
-}
-
-.add-sheet-close {
-  position: absolute;
-  right: 12px;
-  top: 10px;
-  border: 0;
-  background: transparent;
-  color: #6b4425;
-  font-size: 20px;
-  cursor: pointer;
-}
-
-.add-sheet-title {
-  margin: 8px 0 8px;
-  color: #6b4425;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.add-sheet-description {
-  margin: 0;
-  color: #7b5333;
-  font-size: 15px;
-  line-height: 1.5;
-}
-
-.add-sheet-action {
-  margin-top: 14px;
-  width: 100%;
-  height: 48px;
-  border: 0;
-  border-radius: 12px;
-  background: #a97b56;
-  color: #fff9f4;
-  font-size: 18px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
 }
 
 .sr-only {
@@ -639,9 +576,5 @@ body {
 
   .add-bird-button {
     font-size: 30px;
-  }
-
-  .add-sheet-title {
-    font-size: 20px;
   }
 }
