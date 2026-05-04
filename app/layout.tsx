@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Birdy Garden",
-  description: "오늘 발견한 새를 정원에 기록하는 힐링 웹사이트",
+  title: "버디 가든 — 나만의 정원",
+  description: "오늘 만난 새로 정원을 채워가는 기록형 힐링 홈",
 };
 
 export default function RootLayout({
