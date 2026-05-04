@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 
 type PlacedBird = {
   id: string;
@@ -30,7 +30,18 @@ const DECORATION_BIRDS: PlacedBird[] = [
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+  const [isBirdInfoScreenOpen, setIsBirdInfoScreenOpen] = useState(false);
+  const [isPhotoPopupOpen, setIsPhotoPopupOpen] = useState(false);
+  const [canOpenPhotoPopup, setCanOpenPhotoPopup] = useState(true);
+  const [birdName, setBirdName] = useState("청둥오리");
+  const [birdFeature, setBirdFeature] = useState("");
+  const [birdCount, setBirdCount] = useState(2);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
   const menuItems = useMemo<MenuItem[]>(
     () => [
       { label: "캘린더", icon: "📅" },
@@ -48,9 +59,85 @@ export default function Home() {
       return;
     }
 
-    // 처음 진입 시 나무/호수가 있는 중앙 영역이 보이도록 시작 위치를 설정합니다.
     scrollElement.scrollLeft = (scrollElement.scrollWidth - scrollElement.clientWidth) / 2;
   }, []);
+
+  const closeBirdInfoScreen = () => {
+    setIsBirdInfoScreenOpen(false);
+    setIsPhotoPopupOpen(false);
+    setCanOpenPhotoPopup(true);
+    setBirdName("청둥오리");
+    setBirdFeature("");
+    setBirdCount(2);
+    setPhotoPreviewUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
+      return null;
+    });
+  };
+
+  const startRecordingFromSheet = () => {
+    setIsAddSheetOpen(false);
+    setIsBirdInfoScreenOpen(true);
+    setIsPhotoPopupOpen(false);
+    setCanOpenPhotoPopup(true);
+    setBirdName("청둥오리");
+    setBirdFeature("");
+    setBirdCount(2);
+    setPhotoPreviewUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
+      return null;
+    });
+  };
+
+  const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setPhotoPreviewUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
+      return URL.createObjectURL(file);
+    });
+
+    setIsPhotoPopupOpen(false);
+    setCanOpenPhotoPopup(false);
+    event.target.value = "";
+  };
+
+  const clearPhotoPreview = () => {
+    setPhotoPreviewUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev);
+      }
+      return null;
+    });
+    setIsPhotoPopupOpen(false);
+    setCanOpenPhotoPopup(true);
+  };
+
+  const togglePhotoPopupFromHit = () => {
+    if (photoPreviewUrl) {
+      return;
+    }
+    if (!canOpenPhotoPopup) {
+      return;
+    }
+    setIsPhotoPopupOpen((prev) => !prev);
+  };
+
+  const onPhotoHitKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      togglePhotoPopupFromHit();
+    }
+  };
 
   return (
     <main className="garden-page">
@@ -99,11 +186,7 @@ export default function Home() {
           </div>
         </div>
 
-        <button
-          type="button"
-          className="add-bird-button"
-          onClick={() => setIsAddSheetOpen(true)}
-        >
+        <button type="button" className="add-bird-button" onClick={() => setIsAddSheetOpen(true)}>
           + 오늘의 새 추가하기
         </button>
 
@@ -124,12 +207,153 @@ export default function Home() {
               </button>
               <h2 className="add-sheet-title">오늘의 새를 기록해볼까요?</h2>
               <p className="add-sheet-description">
-                다음 단계에서 촬영한 사진, 이름, 발견 위치를 입력해 정원에 새를 추가할 수 있어요.
+                다음 단계에서 사진과 이름, 특징을 입력해 정원에 새를 기록할 수 있어요.
               </p>
-              <button type="button" className="add-sheet-action">
+              <button type="button" className="add-sheet-action" onClick={startRecordingFromSheet}>
                 기록 시작하기
               </button>
             </section>
+          </div>
+        ) : null}
+
+        {isBirdInfoScreenOpen ? (
+          <div className="bird-form-screen" role="dialog" aria-modal="true" aria-label="조류 등록">
+            <header className="bird-form-header">
+              <span className="bird-form-header-title">조류 등록</span>
+              <button type="button" className="bird-form-close" onClick={closeBirdInfoScreen} aria-label="입력 화면 닫기">
+                ✕
+              </button>
+            </header>
+
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+              onChange={handlePhotoFileChange}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+              onChange={handlePhotoFileChange}
+            />
+
+            <div className="bird-form-scroll">
+              <div className="bird-form-card">
+                <div className="bird-photo-block">
+                  <div className="bird-photo-frame">
+                    {isPhotoPopupOpen && !photoPreviewUrl && canOpenPhotoPopup ? (
+                      <div className="bird-photo-popup" role="group" aria-label="사진 선택">
+                        <button
+                          type="button"
+                          className="bird-photo-popup-btn"
+                          onClick={() => cameraInputRef.current?.click()}
+                        >
+                          <span className="bird-photo-popup-ico" aria-hidden>
+                            📷
+                          </span>
+                          촬영하기
+                        </button>
+                        <button
+                          type="button"
+                          className="bird-photo-popup-btn"
+                          onClick={() => galleryInputRef.current?.click()}
+                        >
+                          <span className="bird-photo-popup-ico" aria-hidden>
+                            ☁️
+                          </span>
+                          사진업로드
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div
+                      className="bird-photo-hit"
+                      role="button"
+                      tabIndex={0}
+                      onClick={togglePhotoPopupFromHit}
+                      onKeyDown={onPhotoHitKeyDown}
+                      aria-label="사진 찍기"
+                    >
+                      {photoPreviewUrl ? (
+                        <span className="bird-photo-preview-wrap">
+                          <button
+                            type="button"
+                            className="bird-photo-remove"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              clearPhotoPreview();
+                            }}
+                            aria-label="선택한 사진 지우기"
+                          >
+                            ×
+                          </button>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={photoPreviewUrl} alt="선택한 새 사진 미리보기" className="bird-photo-preview" />
+                        </span>
+                      ) : (
+                        <span className="bird-photo-placeholder">사진 찍기</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <label className="bird-nameplate-label" htmlFor="bird-name-input">
+                  이름
+                </label>
+                <input
+                  id="bird-name-input"
+                  type="text"
+                  className="bird-nameplate-input"
+                  value={birdName}
+                  onChange={(e) => setBirdName(e.target.value)}
+                  placeholder="이름을 입력하세요"
+                  autoComplete="off"
+                />
+
+                <label className="bird-feature-label" htmlFor="bird-feature-input">
+                  (선택) 특징 입력
+                </label>
+                <textarea
+                  id="bird-feature-input"
+                  className="bird-feature-input"
+                  value={birdFeature}
+                  onChange={(e) => setBirdFeature(e.target.value)}
+                  rows={3}
+                  placeholder="예: 부리가 노랗고 목에 흰 고리가 있어요"
+                />
+
+                <div className="bird-count-wrap" aria-label="수량 설정">
+                  <span className="bird-count-label">수량</span>
+                  <div className="bird-count-row">
+                    <button
+                      type="button"
+                      className="bird-count-btn"
+                      onClick={() => setBirdCount((c) => Math.max(1, c - 1))}
+                      aria-label="수량 줄이기"
+                    >
+                      −
+                    </button>
+                    <span className="bird-count-value">{birdCount}</span>
+                    <button
+                      type="button"
+                      className="bird-count-btn"
+                      onClick={() => setBirdCount((c) => c + 1)}
+                      aria-label="수량 늘리기"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : null}
       </section>
