@@ -102,7 +102,7 @@ body {
   --menu-border: #d4b89a;
   position: absolute;
   top: 20px;
-  left: 0;
+  left: 3px;
   z-index: 7;
   display: flex;
   align-items: center;
@@ -171,9 +171,10 @@ body {
   z-index: 2;
   flex: 0 0 auto;
   align-self: center;
-  width: 16px;
+  width: 24px;
   height: 46px;
   margin-left: -3px;
+  padding: 0 3px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -206,7 +207,7 @@ body {
 }
 
 .menu-drawer.closed {
-  transform: translateX(-46px);
+  transform: translateX(calc(-46px - 3px));
   transition: transform 0.22s ease;
 }
 
@@ -254,15 +255,17 @@ body {
 
 .bird-list-header {
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   padding: 14px 16px 10px;
+  box-sizing: border-box;
 }
 
 .bird-list-close {
-  flex: 0 0 auto;
+  grid-column: 1;
+  justify-self: start;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -285,12 +288,15 @@ body {
   width: 40px;
   height: 40px;
   object-fit: contain;
+  flex-shrink: 0;
 }
 
 .bird-list-add-unlisted {
-  flex: 1;
-  max-width: 220px;
-  margin-left: auto;
+  grid-column: 2;
+  justify-self: stretch;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: 0;
   padding: 8px 10px;
   border: 1px solid #c4c4c4;
   border-radius: 8px;
@@ -611,17 +617,9 @@ body {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14);
 }
 
-.bird-nameplate-label,
-.bird-feature-label {
-  display: block;
-  margin: 10px 0 4px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #5a3a22;
-}
-
 .bird-nameplate-input {
   width: 100%;
+  margin-top: 8px;
   border-radius: 999px;
   border: 1px solid #c9a57d;
   padding: 10px 14px;
@@ -634,6 +632,7 @@ body {
 
 .bird-feature-input {
   width: 100%;
+  margin-top: 10px;
   resize: vertical;
   min-height: 72px;
   border-radius: 14px;
@@ -647,44 +646,54 @@ body {
 }
 
 .bird-count-wrap {
-  margin-top: 14px;
+  margin-top: 16px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.bird-count-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #5a3a22;
+  justify-content: center;
+  gap: 0;
 }
 
 .bird-count-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 14px;
 }
 
 .bird-count-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
   border: 2px solid #8b5e3c;
   background: linear-gradient(to bottom, #e8cfa8, #d2a978);
   color: #3b2414;
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 700;
   cursor: pointer;
   line-height: 1;
   -webkit-tap-highlight-color: transparent;
 }
 
+.bird-count-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .bird-count-value {
-  min-width: 28px;
+  box-sizing: border-box;
+  min-width: 48px;
+  height: 48px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #8b5e3c;
+  border-radius: 8px;
+  background: #fffaf3;
   text-align: center;
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 900;
   color: #3f2615;
 }
 

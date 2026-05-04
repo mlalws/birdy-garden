@@ -50,7 +50,7 @@ export default function Home() {
   const [canOpenPhotoPopup, setCanOpenPhotoPopup] = useState(true);
   const [birdName, setBirdName] = useState("청둥오리");
   const [birdFeature, setBirdFeature] = useState("");
-  const [birdCount, setBirdCount] = useState(2);
+  const [birdCount, setBirdCount] = useState(1);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -82,7 +82,7 @@ export default function Home() {
     setCanOpenPhotoPopup(true);
     setBirdName("청둥오리");
     setBirdFeature("");
-    setBirdCount(2);
+    setBirdCount(1);
     setPhotoPreviewUrl((prev) => {
       if (prev) {
         URL.revokeObjectURL(prev);
@@ -117,7 +117,7 @@ export default function Home() {
     setCanOpenPhotoPopup(true);
     setBirdName(nextName);
     setBirdFeature("");
-    setBirdCount(2);
+    setBirdCount(1);
     setPhotoPreviewUrl((prev) => {
       if (prev) {
         URL.revokeObjectURL(prev);
@@ -235,14 +235,13 @@ export default function Home() {
           <div className="bird-list-screen" role="dialog" aria-modal="true" aria-label="조류 목록">
             <header className="bird-list-header">
               <button type="button" className="bird-list-close" onClick={closeBirdList} aria-label="목록 닫기">
-                <Image
+                <img
                   src="/x.png"
                   alt=""
-                  width={96}
-                  height={96}
-                  priority
-                  unoptimized
-                  sizes="40px"
+                  width={40}
+                  height={40}
+                  decoding="sync"
+                  fetchPriority="high"
                   className="bird-list-close-img"
                 />
               </button>
@@ -313,14 +312,13 @@ export default function Home() {
                 onClick={backFromBirdFormToList}
                 aria-label="조류 목록으로 돌아가기"
               >
-                <Image
+                <img
                   src="/left.png"
                   alt=""
-                  width={128}
-                  height={128}
-                  priority
-                  unoptimized
-                  sizes="56px"
+                  width={56}
+                  height={42}
+                  decoding="sync"
+                  fetchPriority="high"
                   className="bird-form-back-img"
                 />
               </button>
@@ -407,38 +405,33 @@ export default function Home() {
                   </div>
                 </div>
 
-                <label className="bird-nameplate-label" htmlFor="bird-name-input">
-                  이름
-                </label>
                 <input
                   id="bird-name-input"
                   type="text"
                   className="bird-nameplate-input"
                   value={birdName}
                   onChange={(e) => setBirdName(e.target.value)}
-                  placeholder="이름을 입력하세요"
+                  aria-label="이름"
                   autoComplete="off"
                 />
 
-                <label className="bird-feature-label" htmlFor="bird-feature-input">
-                  (선택) 특징 입력
-                </label>
                 <textarea
                   id="bird-feature-input"
                   className="bird-feature-input"
                   value={birdFeature}
                   onChange={(e) => setBirdFeature(e.target.value)}
                   rows={3}
-                  placeholder="예: 부리가 노랗고 목에 흰 고리가 있어요"
+                  placeholder="메모: 예-부리가 유독 푸른색을 띄어요"
+                  aria-label="메모"
                 />
 
                 <div className="bird-count-wrap" aria-label="수량 설정">
-                  <span className="bird-count-label">수량</span>
                   <div className="bird-count-row">
                     <button
                       type="button"
                       className="bird-count-btn"
                       onClick={() => setBirdCount((c) => Math.max(1, c - 1))}
+                      disabled={birdCount <= 1}
                       aria-label="수량 줄이기"
                     >
                       −
