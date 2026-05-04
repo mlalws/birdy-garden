@@ -89,6 +89,7 @@ body {
 }
 
 .menu-drawer {
+  --menu-surface: #FDEBD0;
   position: absolute;
   top: 20px;
   left: 0;
@@ -99,28 +100,27 @@ body {
   padding: 0;
   background: transparent;
   cursor: pointer;
-  filter: drop-shadow(0 1px 4px rgba(48, 38, 32, 0.14));
+  box-shadow: none;
+  filter: none;
 }
 
+/* Figma: flat pale peach bar + rounded tab, no stroke/shadow */
 .menu-panel {
-  --menu-surface: #d9cdbe;
-  --menu-edge: rgba(92, 78, 68, 0.28);
-  width: 46px;
+  width: 44px;
   box-sizing: border-box;
-  padding: 14px 2px 14px 5px;
-  border: 1px solid var(--menu-edge);
-  border-right: none;
-  border-radius: 999px 0 0 999px;
+  padding: 16px 3px 16px 4px;
+  border: none;
+  border-radius: 22px 0 0 22px;
   background: var(--menu-surface);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 11px;
 }
 
 .menu-item {
-  color: #3d342c;
+  color: #3a3633;
   font-size: 0;
   font-weight: 700;
   display: flex;
@@ -153,47 +153,41 @@ body {
 }
 
 .menu-handle {
-  position: relative;
   flex: 0 0 auto;
-  width: 9px;
-  height: 26px;
-  margin-left: 0;
-  display: grid;
-  place-items: center;
-  color: #2c241e;
+  width: 13px;
+  height: 36px;
+  margin-left: -1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  background: transparent;
-}
-
-.menu-handle-shape {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.menu-handle-fill {
-  fill: #d9cdbe;
-}
-
-.menu-handle-stroke {
-  stroke: rgba(92, 78, 68, 0.35);
-  stroke-width: 1px;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
+  background: var(--menu-surface);
+  border-radius: 0 11px 11px 0;
+  box-shadow: none;
 }
 
 .menu-arrow {
-  position: relative;
-  z-index: 1;
-  font-size: 9px;
-  line-height: 1;
+  display: block;
+  width: 0;
+  height: 0;
+  flex-shrink: 0;
   pointer-events: none;
 }
 
+.menu-arrow--left {
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-right: 6px solid #2d2d2d;
+}
+
+.menu-arrow--right {
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 6px solid #2d2d2d;
+}
+
 .menu-drawer.closed {
-  transform: translateX(-46px);
+  transform: translateX(-44px);
   transition: transform 0.22s ease;
 }
 

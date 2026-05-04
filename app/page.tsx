@@ -194,16 +194,11 @@ export default function Home() {
             ))}
           </div>
           <div className="menu-handle" aria-hidden>
-            <svg className="menu-handle-shape" viewBox="0 0 9 26" preserveAspectRatio="none" focusable="false">
-              <path d="M0,0 L9,5 L9,21 L0,26 Z" className="menu-handle-fill" />
-              <path
-                d="M0,0 L9,5 M9,5 L9,21 M9,21 L0,26"
-                className="menu-handle-stroke"
-                fill="none"
-                vectorEffect="nonScalingStroke"
-              />
-            </svg>
-            <span className="menu-arrow">{isMenuOpen ? "◀" : "▶"}</span>
+            {isMenuOpen ? (
+              <span className="menu-arrow menu-arrow--left" />
+            ) : (
+              <span className="menu-arrow menu-arrow--right" />
+            )}
           </div>
         </button>
 
