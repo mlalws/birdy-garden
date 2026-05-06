@@ -38,7 +38,7 @@ const DEX_ENTRIES: { id: string; name?: string; unlocked: boolean; isNew?: boole
   })),
 ];
 
-const DECORATION_BIRDS: PlacedBird[] = [
+const BASE_BIRD_SLOTS: PlacedBird[] = [
   { id: "t1", xPercent: 62, yPercent: 24, size: 20 },
   { id: "t2", xPercent: 71, yPercent: 22, size: 18 },
   { id: "t3", xPercent: 56, yPercent: 30, size: 22 },
@@ -49,6 +49,24 @@ const DECORATION_BIRDS: PlacedBird[] = [
   { id: "g1", xPercent: 81, yPercent: 70, size: 18 },
   { id: "g2", xPercent: 87, yPercent: 82, size: 19 },
 ];
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const createGardenBirds = (count: number, offset: number): PlacedBird[] => {
+  return Array.from({ length: count }, (_, idx) => {
+    const seq = offset + idx;
+    const base = BASE_BIRD_SLOTS[seq % BASE_BIRD_SLOTS.length];
+    const ring = Math.floor(seq / BASE_BIRD_SLOTS.length);
+    const jitter = (ring % 2 === 0 ? 1 : -1) * Math.min(5, ring + 1);
+
+    return {
+      id: `garden-${Date.now()}-${seq}`,
+      xPercent: clamp(base.xPercent + jitter, 8, 92),
+      yPercent: clamp(base.yPercent + (ring % 3) - 1, 12, 88),
+      size: clamp(base.size - (ring % 2), 16, 30),
+    };
+  });
+};
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -62,6 +80,7 @@ export default function Home() {
   const [birdCount, setBirdCount] = useState(1);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
+  const [gardenBirds, setGardenBirds] = useState<PlacedBird[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -204,6 +223,13 @@ export default function Home() {
     }
   };
 
+  const submitBirdRegistration = () => {
+    const amount = Math.max(1, birdCount);
+    setGardenBirds((prev) => [...prev, ...createGardenBirds(amount, prev.length)]);
+    setIsBirdInfoScreenOpen(false);
+    resetBirdFormDraft();
+  };
+
   return (
     <main className="garden-page">
       <section className="phone-frame">
@@ -250,7 +276,7 @@ export default function Home() {
 
         <div className="garden-scroll" ref={scrollRef}>
           <div className="garden-world">
-            {DECORATION_BIRDS.map((bird) => (
+            {gardenBirds.map((bird) => (
               <span
                 key={bird.id}
                 className="bird"
@@ -503,7 +529,7 @@ export default function Home() {
             </div>
 
             <footer className="bird-form-footer">
-              <button type="button" className="bird-form-submit">
+              <button type="button" className="bird-form-submit" onClick={submitBirdRegistration}>
                 추가하기
               </button>
             </footer>
