@@ -29,6 +29,15 @@ const BIRD_LIST_ITEMS: ListBird[] = [
   { id: "ph4", name: "", isPlaceholder: true },
 ];
 
+/** 조류 도감 슬롯 (청둥오리만 해금, 나머지 잠금) */
+const DEX_ENTRIES: { id: string; name?: string; unlocked: boolean; isNew?: boolean }[] = [
+  { id: "mallard", name: "청둥오리", unlocked: true, isNew: true },
+  ...Array.from({ length: 14 }, (_, i) => ({
+    id: `locked-${i + 1}`,
+    unlocked: false,
+  })),
+];
+
 const DECORATION_BIRDS: PlacedBird[] = [
   { id: "t1", xPercent: 62, yPercent: 24, size: 20 },
   { id: "t2", xPercent: 71, yPercent: 22, size: 18 },
@@ -52,6 +61,7 @@ export default function Home() {
   const [birdFeature, setBirdFeature] = useState("");
   const [birdCount, setBirdCount] = useState(1);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [isDexOpen, setIsDexOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +89,7 @@ export default function Home() {
 
   useEffect(() => {
     const warm = (src: string) => {
-      const img = new Image();
+      const img = new window.Image();
       img.src = src;
     };
     warm("/x.png");
@@ -189,6 +199,20 @@ export default function Home() {
     }
   };
 
+  const handleMenuItemActivate = (label: string) => {
+    if (label === "도감") {
+      setIsDexOpen(true);
+      setIsMenuOpen(false);
+    }
+  };
+
+  const onMenuDrawerKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setIsMenuOpen((prev) => !prev);
+    }
+  };
+
   return (
     <main className="garden-page">
       <section className="phone-frame">
@@ -198,20 +222,30 @@ export default function Home() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/left.png" alt="" width={48} height={48} decoding="async" fetchPriority="high" />
         </div>
-        <button
-          type="button"
+        <div
           className={`menu-drawer ${isMenuOpen ? "open" : "closed"}`}
-          onClick={() => setIsMenuOpen((prev) => !prev)}
+          role="button"
+          tabIndex={0}
           aria-label="메뉴 열기 또는 닫기"
+          onClick={() => setIsMenuOpen((prev) => !prev)}
+          onKeyDown={onMenuDrawerKeyDown}
         >
           <div className="menu-panel">
             {menuItems.map((item) => (
-              <span key={item.label} className="menu-item">
+              <button
+                key={item.label}
+                type="button"
+                className="menu-item"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleMenuItemActivate(item.label);
+                }}
+              >
                 <span className="menu-item-icon" aria-hidden>
                   {item.icon}
                 </span>
                 <span className="menu-item-label">{item.label}</span>
-              </span>
+              </button>
             ))}
           </div>
           <div className="menu-handle" aria-hidden>
@@ -221,7 +255,7 @@ export default function Home() {
               <span className="menu-arrow menu-arrow--right" />
             )}
           </div>
-        </button>
+        </div>
 
         <div className="garden-scroll" ref={scrollRef}>
           <div className="garden-world">
@@ -464,25 +498,79 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-            </div>
 
-            <section className="bird-form-map" aria-label="발견 장소 설정">
-              <h3 className="bird-map-title">발견 장소 설정</h3>
-              <div className="bird-map-frame">
-                <iframe
-                  title="발견 장소 지도"
-                  src="https://www.openstreetmap.org/export/embed.html?bbox=127.02%2C37.51%2C127.06%2C37.54&layer=mapnik"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                />
-              </div>
-            </section>
+              <section className="bird-map-section" aria-label="발견 장소 설정">
+                <h3 className="bird-map-title">발견 장소 설정</h3>
+                <div className="bird-map-frame">
+                  <iframe
+                    title="발견 장소 지도"
+                    src="https://www.openstreetmap.org/export/embed.html?bbox=127.02%2C37.51%2C127.06%2C37.54&layer=mapnik"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                  />
+                </div>
+              </section>
+            </div>
 
             <footer className="bird-form-footer">
               <button type="button" className="bird-form-submit">
                 추가하기
               </button>
             </footer>
+          </div>
+        ) : null}
+
+        {isDexOpen ? (
+          <div className="bird-dex-screen" role="dialog" aria-modal="true" aria-label="조류 도감">
+            <header className="bird-dex-header">
+              <button type="button" className="bird-dex-close" onClick={() => setIsDexOpen(false)} aria-label="도감 닫기">
+                <img
+                  src="/x.png"
+                  alt=""
+                  width={48}
+                  height={48}
+                  decoding="sync"
+                  className="bird-dex-close-img"
+                />
+              </button>
+              <div className="bird-dex-title-plank">
+                <h1 className="bird-dex-title">조류 도감</h1>
+              </div>
+            </header>
+
+            <div className="bird-dex-scroll">
+              <div className="bird-dex-grid">
+                {DEX_ENTRIES.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className={`bird-dex-card${entry.unlocked ? "" : " bird-dex-card--locked"}`}
+                  >
+                    {entry.unlocked && entry.isNew ? (
+                      <span className="bird-dex-new" aria-label="새로 해금">
+                        New!
+                      </span>
+                    ) : null}
+                    <div className="bird-dex-card-visual">
+                      {entry.unlocked ? (
+                        <div className="bird-dex-unlocked-img-wrap">
+                          <Image
+                            src="/test.png"
+                            alt={entry.name ?? "청둥오리"}
+                            fill
+                            sizes="120px"
+                            className="bird-dex-card-img"
+                          />
+                        </div>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src="/bird-silhouette.svg" alt="" className="bird-dex-silhouette" />
+                      )}
+                    </div>
+                    <span className="bird-dex-card-name">{entry.unlocked ? entry.name : "???"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         ) : null}
       </section>
