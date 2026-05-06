@@ -516,11 +516,12 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 10px 10px 12px;
+  padding: 10px 10px 8px;
 }
 
-.bird-map-section {
-  margin: 4px 2px 8px;
+.bird-form-map {
+  flex: 0 0 auto;
+  padding: 0 12px 10px;
 }
 
 .bird-map-title {

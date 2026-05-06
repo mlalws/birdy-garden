@@ -464,19 +464,19 @@ export default function Home() {
                   </div>
                 </div>
               </div>
-
-              <div className="bird-map-section">
-                <h3 className="bird-map-title">발견 장소 설정</h3>
-                <div className="bird-map-frame">
-                  <iframe
-                    title="발견 장소 지도"
-                    src="https://www.openstreetmap.org/export/embed.html?bbox=127.02%2C37.51%2C127.06%2C37.54&layer=mapnik"
-                    loading="lazy"
-                    referrerPolicy="no-referrer-when-downgrade"
-                  />
-                </div>
-              </div>
             </div>
+
+            <section className="bird-form-map" aria-label="발견 장소 설정">
+              <h3 className="bird-map-title">발견 장소 설정</h3>
+              <div className="bird-map-frame">
+                <iframe
+                  title="발견 장소 지도"
+                  src="https://www.openstreetmap.org/export/embed.html?bbox=127.02%2C37.51%2C127.06%2C37.54&layer=mapnik"
+                  loading="lazy"
+                  referrerPolicy="no-referrer-when-downgrade"
+                />
+              </div>
+            </section>
 
             <footer className="bird-form-footer">
               <button type="button" className="bird-form-submit">
