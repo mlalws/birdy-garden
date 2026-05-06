@@ -39,15 +39,14 @@ const DEX_ENTRIES: { id: string; name?: string; unlocked: boolean; isNew?: boole
 ];
 
 const BASE_BIRD_SLOTS: PlacedBird[] = [
-  { id: "t1", xPercent: 62, yPercent: 24, size: 20 },
-  { id: "t2", xPercent: 71, yPercent: 22, size: 18 },
-  { id: "t3", xPercent: 56, yPercent: 30, size: 22 },
-  { id: "t4", xPercent: 67, yPercent: 35, size: 20 },
-  { id: "l1", xPercent: 33, yPercent: 74, size: 24 },
-  { id: "l2", xPercent: 21, yPercent: 78, size: 24 },
-  { id: "l3", xPercent: 44, yPercent: 76, size: 29 },
-  { id: "g1", xPercent: 81, yPercent: 70, size: 18 },
-  { id: "g2", xPercent: 87, yPercent: 82, size: 19 },
+  // 물/잔디 구역(하단부) 전용 배치
+  { id: "w1", xPercent: 19, yPercent: 72, size: 24 },
+  { id: "w2", xPercent: 30, yPercent: 78, size: 22 },
+  { id: "w3", xPercent: 41, yPercent: 74, size: 26 },
+  { id: "w4", xPercent: 55, yPercent: 80, size: 24 },
+  { id: "w5", xPercent: 67, yPercent: 73, size: 23 },
+  { id: "w6", xPercent: 78, yPercent: 82, size: 21 },
+  { id: "w7", xPercent: 88, yPercent: 76, size: 22 },
 ];
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -62,8 +61,9 @@ const createGardenBirds = (count: number, offset: number): PlacedBird[] => {
     return {
       id: `garden-${Date.now()}-${seq}`,
       xPercent: clamp(base.xPercent + jitter, 8, 92),
-      yPercent: clamp(base.yPercent + (ring % 3) - 1, 12, 88),
-      size: clamp(base.size - (ring % 2), 16, 30),
+      yPercent: clamp(base.yPercent + (ring % 3) - 1, 66, 90),
+      // 기존 대비 약 2배 크기
+      size: clamp(base.size * 2 - (ring % 2), 36, 58),
     };
   });
 };
