@@ -102,24 +102,19 @@ export default function Home() {
     setBirdName("청둥오리");
     setBirdFeature("");
     setBirdCount(1);
-    setPhotoPreviewUrl((prev) => {
-      if (prev) {
-        URL.revokeObjectURL(prev);
-      }
-      return null;
-    });
+    setPhotoPreviewUrl(null);
   };
 
   const backFromBirdFormToList = () => {
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
     setIsBirdListOpen(true);
-    setSelectedListBirdId("mallard");
+    setSelectedListBirdId(null);
   };
 
   const openBirdList = () => {
     setIsBirdListOpen(true);
-    setSelectedListBirdId("mallard");
+    setSelectedListBirdId(null);
   };
 
   const closeBirdList = () => {
@@ -137,12 +132,7 @@ export default function Home() {
     setBirdName(nextName);
     setBirdFeature("");
     setBirdCount(1);
-    setPhotoPreviewUrl((prev) => {
-      if (prev) {
-        URL.revokeObjectURL(prev);
-      }
-      return null;
-    });
+    setPhotoPreviewUrl(null);
   };
 
   const goNextFromBirdList = () => {
@@ -159,25 +149,26 @@ export default function Home() {
       return;
     }
 
-    setPhotoPreviewUrl((prev) => {
-      if (prev) {
-        URL.revokeObjectURL(prev);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result === "string") {
+        setPhotoPreviewUrl(result);
       }
-      return URL.createObjectURL(file);
-    });
-
-    setIsPhotoPopupOpen(false);
-    setCanOpenPhotoPopup(false);
-    event.target.value = "";
+      setIsPhotoPopupOpen(false);
+      setCanOpenPhotoPopup(false);
+      event.target.value = "";
+    };
+    reader.onerror = () => {
+      setIsPhotoPopupOpen(false);
+      setCanOpenPhotoPopup(true);
+      event.target.value = "";
+    };
+    reader.readAsDataURL(file);
   };
 
   const clearPhotoPreview = () => {
-    setPhotoPreviewUrl((prev) => {
-      if (prev) {
-        URL.revokeObjectURL(prev);
-      }
-      return null;
-    });
+    setPhotoPreviewUrl(null);
     setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
   };
@@ -323,7 +314,6 @@ export default function Home() {
                     className={`bird-list-card${selectedListBirdId === item.id ? " bird-list-card--selected" : ""}`}
                     onClick={() => {
                       setSelectedListBirdId(item.id);
-                      openBirdRegistration({ name: item.name });
                     }}
                   >
                     <div className="bird-list-thumb">
