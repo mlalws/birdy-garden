@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type PlacedBird = {
   id: string;
@@ -37,6 +38,8 @@ const DEX_ENTRIES: { id: string; name?: string; unlocked: boolean; isNew?: boole
     unlocked: false,
   })),
 ];
+
+const GARDEN_STORAGE_KEY = "birdy-garden:birds:v1";
 
 const BASE_BIRD_SLOTS: PlacedBird[] = [
   // 물/잔디 구역(하단부) 전용 배치
@@ -81,6 +84,12 @@ export default function Home() {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
   const [gardenBirds, setGardenBirds] = useState<PlacedBird[]>([]);
+  const [isGardenHydrated, setIsGardenHydrated] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
+  const [loginMessage, setLoginMessage] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +123,50 @@ export default function Home() {
     warm("/x.png");
     warm("/left.png");
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(GARDEN_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        return;
+      }
+      const restored: PlacedBird[] = parsed
+        .filter(
+          (item) =>
+            item &&
+            typeof item.id === "string" &&
+            typeof item.xPercent === "number" &&
+            typeof item.yPercent === "number" &&
+            typeof item.size === "number"
+        )
+        .map((item) => ({
+          id: item.id,
+          xPercent: item.xPercent,
+          yPercent: item.yPercent,
+          size: item.size,
+        }));
+      setGardenBirds(restored);
+    } catch {
+      // localStorage가 비정상일 때는 빈 정원으로 시작
+    } finally {
+      setIsGardenHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isGardenHydrated) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(GARDEN_STORAGE_KEY, JSON.stringify(gardenBirds));
+    } catch {
+      // 저장공간 제한 등으로 저장 실패 시 UI는 그대로 유지
+    }
+  }, [gardenBirds, isGardenHydrated]);
 
   const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
@@ -230,6 +283,39 @@ export default function Home() {
     resetBirdFormDraft();
   };
 
+  const openLoginScreen = () => {
+    setIsMenuOpen(false);
+    setIsLoginOpen(true);
+    setLoginMessage("");
+  };
+
+  const submitLogin = async () => {
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setLoginMessage("이메일과 비밀번호를 입력해 주세요.");
+      return;
+    }
+    try {
+      setIsLoginSubmitting(true);
+      setLoginMessage("");
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginEmail.trim(),
+        password: loginPassword,
+      });
+      if (error) {
+        setLoginMessage(`로그인 실패: ${error.message}`);
+        return;
+      }
+      setLoginMessage("로그인 성공!");
+      setIsLoginOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      setLoginMessage(`로그인 실패: ${message}`);
+    } finally {
+      setIsLoginSubmitting(false);
+    }
+  };
+
   return (
     <main className="garden-page">
       <section className="phone-frame">
@@ -264,6 +350,9 @@ export default function Home() {
                 <span className="menu-item-label">{item.label}</span>
               </button>
             ))}
+            <button type="button" className="menu-login-button" onClick={openLoginScreen}>
+              로그인
+            </button>
           </div>
           <div className="menu-handle" aria-hidden>
             {isMenuOpen ? (
@@ -586,6 +675,40 @@ export default function Home() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isLoginOpen ? (
+          <div className="bird-login-screen" role="dialog" aria-modal="true" aria-label="로그인">
+            <header className="bird-login-header">
+              <button type="button" className="bird-login-close" onClick={() => setIsLoginOpen(false)} aria-label="로그인 닫기">
+                <img src="/x.png" alt="" width={48} height={48} decoding="sync" className="bird-login-close-img" />
+              </button>
+              <h2 className="bird-login-title">로그인</h2>
+            </header>
+
+            <div className="bird-login-body">
+              <input
+                type="email"
+                className="bird-login-input"
+                placeholder="이메일"
+                value={loginEmail}
+                onChange={(event) => setLoginEmail(event.target.value)}
+                autoComplete="email"
+              />
+              <input
+                type="password"
+                className="bird-login-input"
+                placeholder="비밀번호"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+                autoComplete="current-password"
+              />
+              <button type="button" className="bird-login-submit" onClick={submitLogin} disabled={isLoginSubmitting}>
+                {isLoginSubmitting ? "로그인 중..." : "로그인"}
+              </button>
+              {loginMessage ? <p className="bird-login-message">{loginMessage}</p> : null}
             </div>
           </div>
         ) : null}

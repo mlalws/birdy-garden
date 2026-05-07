@@ -1,5 +1,34 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Supabase 연결
+
+1. [Supabase](https://supabase.com)에서 프로젝트를 만듭니다.
+2. **Project Settings → API**에서 `Project URL`, `anon public` 키를 복사합니다.
+3. 프로젝트 루트에 `.env.local` 파일을 만들고 아래처럼 넣습니다. (`env.local.example` 참고)
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+```
+
+4. 의존성 설치 후 개발 서버 실행:
+
+```bash
+npm install
+npm run dev
+```
+
+5. 클라이언트 컴포넌트에서 사용:
+
+```ts
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+const supabase = getSupabaseBrowserClient();
+// 예: const { data } = await supabase.from("birds").select("*");
+```
+
+서버 전용 작업(Row Level Security 우회 등)이 필요하면 **service role** 키는 `.env.local`에만 두고, **`NEXT_PUBLIC_` 접두사를 붙이지 마세요.** (브라우저에 노출됨)
+
 ## Getting Started
 
 First, run the development server:
