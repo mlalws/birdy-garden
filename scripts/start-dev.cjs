@@ -5,6 +5,18 @@ const fs = require("fs");
 const net = require("net");
 
 const root = path.join(__dirname, "..");
+const node22 = "/opt/homebrew/opt/node@22/bin/node";
+
+if (fs.existsSync(node22) && Number((process.version || "v0").slice(1).split(".")[0]) >= 24) {
+  const reexec = spawn(node22, [__filename], {
+    cwd: root,
+    stdio: "inherit",
+    env: process.env,
+  });
+  reexec.on("exit", (code, signal) => process.exit(signal ? 1 : (code ?? 0)));
+  return;
+}
+
 const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
 
 if (!fs.existsSync(nextBin)) {
@@ -16,7 +28,7 @@ if (!fs.existsSync(nextBin)) {
 const port = process.env.PORT || "3000";
 // Next 기본 호스트: -H 미지정 시 CLI 기본값 사용.
 // 일부 Mac은 "localhost"가 IPv6(::1)라 127.0.0.1 이 더 잘 됩니다.
-const host = process.env.HOST;
+const host = process.env.HOST || "127.0.0.1";
 // Node 24 등에서 Turbopack 첫 기동이 멈춘 것처럼 보일 수 있어 기본은 Webpack.
 const useWebpack = process.env.NEXT_DEV_WEBPACK !== "0";
 
@@ -28,10 +40,7 @@ if (major >= 24) {
   console.warn("");
 }
 
-const args = [nextBin, "dev", "-p", port];
-if (host) {
-  args.push("-H", host);
-}
+const args = [nextBin, "dev", "-p", port, "-H", host];
 if (useWebpack) {
   args.push("--webpack");
 }

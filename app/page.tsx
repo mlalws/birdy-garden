@@ -3,13 +3,13 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-
-type PlacedBird = {
-  id: string;
-  xPercent: number;
-  yPercent: number;
-  size: number;
-};
+import {
+  loadUserGarden,
+  saveUserGarden,
+  type BirdRecord,
+  type PlacedBird,
+  type UserGardenPayload,
+} from "@/lib/supabase/garden";
 
 type MenuItem = {
   label: string;
@@ -54,6 +54,17 @@ const BASE_BIRD_SLOTS: PlacedBird[] = [
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+const displayIdFromAuthEmail = (email: string | undefined | null) => {
+  if (!email) {
+    return "";
+  }
+  const at = email.indexOf("@");
+  if (at <= 0) {
+    return email;
+  }
+  return email.slice(0, at);
+};
+
 const createGardenBirds = (count: number, offset: number): PlacedBird[] => {
   return Array.from({ length: count }, (_, idx) => {
     const seq = offset + idx;
@@ -84,16 +95,36 @@ export default function Home() {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
   const [gardenBirds, setGardenBirds] = useState<PlacedBird[]>([]);
+  const [birdRecords, setBirdRecords] = useState<BirdRecord[]>([]);
   const [isGardenHydrated, setIsGardenHydrated] = useState(false);
+  const [isGardenSyncing, setIsGardenSyncing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [loginEmail, setLoginEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
   const [loginMessage, setLoginMessage] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [profileUsername, setProfileUsername] = useState("");
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const saveGardenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  const profileInitial = useMemo(() => {
+    const trimmed = profileUsername.trim();
+    if (!trimmed) {
+      return "?";
+    }
+    return trimmed.slice(0, 1).toUpperCase();
+  }, [profileUsername]);
+
+  const syncProfileFromSession = (email: string | undefined | null) => {
+    setProfileUsername(displayIdFromAuthEmail(email));
+  };
 
   const menuItems = useMemo<MenuItem[]>(
     () => [
@@ -116,25 +147,45 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const warm = (src: string) => {
-      const img = new window.Image();
-      img.src = src;
-    };
-    warm("/x.png");
-    warm("/left.png");
-  }, []);
+    if (!isProfileOpen) {
+      return;
+    }
 
-  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (profileMenuRef.current?.contains(target)) {
+        return;
+      }
+      setIsProfileOpen(false);
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [isProfileOpen]);
+
+  const applyGardenPayload = (birds: PlacedBird[], records: BirdRecord[]) => {
+    setGardenBirds(birds);
+    setBirdRecords(records);
+  };
+
+  const readGuestGardenFromLocal = (): UserGardenPayload => {
     try {
       const raw = window.localStorage.getItem(GARDEN_STORAGE_KEY);
       if (!raw) {
-        return;
+        return { birds: [], records: [] };
       }
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) {
-        return;
+        return { birds: [], records: [] };
       }
-      const restored: PlacedBird[] = parsed
+      const birds: PlacedBird[] = parsed
         .filter(
           (item) =>
             item &&
@@ -149,24 +200,137 @@ export default function Home() {
           yPercent: item.yPercent,
           size: item.size,
         }));
-      setGardenBirds(restored);
+      return { birds, records: [] };
     } catch {
-      // localStorage가 비정상일 때는 빈 정원으로 시작
-    } finally {
-      setIsGardenHydrated(true);
+      return { birds: [], records: [] };
     }
+  };
+
+  const loadGardenForUser = async (uid: string, options?: { mergeGuestIfEmpty?: boolean }) => {
+    setIsGardenSyncing(true);
+    try {
+      const payload = await loadUserGarden(uid);
+      const guest = options?.mergeGuestIfEmpty ? readGuestGardenFromLocal() : { birds: [], records: [] };
+      if (payload.birds.length === 0 && guest.birds.length > 0) {
+        const merged = { birds: guest.birds, records: guest.records };
+        applyGardenPayload(merged.birds, merged.records);
+        await saveUserGarden(uid, merged);
+        return;
+      }
+      applyGardenPayload(payload.birds, payload.records);
+    } catch {
+      applyGardenPayload([], []);
+    } finally {
+      setIsGardenSyncing(false);
+    }
+  };
+
+  const loadGuestGardenFromLocal = () => {
+    const guest = readGuestGardenFromLocal();
+    applyGardenPayload(guest.birds, guest.records);
+  };
+
+  useEffect(() => {
+    let unsubscribed = false;
+
+    const syncAuthState = async () => {
+      try {
+        const supabase = getSupabaseBrowserClient();
+        const { data } = await supabase.auth.getSession();
+        const session = data.session;
+        if (!unsubscribed) {
+          setIsLoggedIn(!!session);
+          syncProfileFromSession(session?.user.email);
+          const initialUserId = session?.user.id ?? null;
+          setUserId(initialUserId);
+          if (initialUserId) {
+            await loadGardenForUser(initialUserId, { mergeGuestIfEmpty: true });
+          } else {
+            loadGuestGardenFromLocal();
+          }
+          setIsGardenHydrated(true);
+        }
+        const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+          setIsLoggedIn(!!nextSession);
+          syncProfileFromSession(nextSession?.user.email);
+          if (!nextSession) {
+            setIsProfileOpen(false);
+            setProfileUsername("");
+          }
+          const nextUserId = nextSession?.user.id ?? null;
+          setUserId(nextUserId);
+          if (nextUserId) {
+            await loadGardenForUser(nextUserId, { mergeGuestIfEmpty: true });
+          } else {
+            loadGuestGardenFromLocal();
+          }
+        });
+        return () => {
+          listener.subscription.unsubscribe();
+        };
+      } catch {
+        if (!unsubscribed) {
+          setIsLoggedIn(false);
+          setUserId(null);
+          setProfileUsername("");
+          setIsProfileOpen(false);
+          loadGuestGardenFromLocal();
+          setIsGardenHydrated(true);
+        }
+      }
+      return () => undefined;
+    };
+
+    let cleanup = () => undefined;
+    void syncAuthState().then((fn) => {
+      cleanup = fn;
+    });
+
+    return () => {
+      unsubscribed = true;
+      cleanup();
+      if (saveGardenTimerRef.current) {
+        clearTimeout(saveGardenTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
-    if (!isGardenHydrated) {
+    const warm = (src: string) => {
+      const img = new window.Image();
+      img.src = src;
+    };
+    warm("/x.png");
+    warm("/left.png");
+  }, []);
+
+  useEffect(() => {
+    if (!isGardenHydrated || isGardenSyncing) {
       return;
     }
+
+    if (userId) {
+      if (saveGardenTimerRef.current) {
+        clearTimeout(saveGardenTimerRef.current);
+      }
+      saveGardenTimerRef.current = setTimeout(() => {
+        void saveUserGarden(userId, { birds: gardenBirds, records: birdRecords }).catch(() => {
+          // 네트워크/권한 오류 시 UI는 유지
+        });
+      }, 600);
+      return () => {
+        if (saveGardenTimerRef.current) {
+          clearTimeout(saveGardenTimerRef.current);
+        }
+      };
+    }
+
     try {
       window.localStorage.setItem(GARDEN_STORAGE_KEY, JSON.stringify(gardenBirds));
     } catch {
-      // 저장공간 제한 등으로 저장 실패 시 UI는 그대로 유지
+      // localStorage 저장 실패 시 무시
     }
-  }, [gardenBirds, isGardenHydrated]);
+  }, [gardenBirds, birdRecords, isGardenHydrated, isGardenSyncing, userId]);
 
   const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
@@ -276,11 +440,53 @@ export default function Home() {
     }
   };
 
-  const submitBirdRegistration = () => {
+  const persistGarden = async (uid: string, birds: PlacedBird[], records: BirdRecord[]) => {
+    await saveUserGarden(uid, { birds, records });
+  };
+
+  const submitBirdRegistration = async () => {
     const amount = Math.max(1, birdCount);
-    setGardenBirds((prev) => [...prev, ...createGardenBirds(amount, prev.length)]);
+    const newBirds = createGardenBirds(amount, gardenBirds.length);
+    const newRecord: BirdRecord = {
+      id: `record-${Date.now()}`,
+      name: birdName.trim() || "청둥오리",
+      feature: birdFeature.trim(),
+      photoUrl: photoPreviewUrl,
+      count: amount,
+      createdAt: new Date().toISOString(),
+    };
+    const nextBirds = [...gardenBirds, ...newBirds];
+    const nextRecords = [...birdRecords, newRecord];
+
+    setGardenBirds(nextBirds);
+    setBirdRecords(nextRecords);
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
+
+    if (userId) {
+      try {
+        await persistGarden(userId, nextBirds, nextRecords);
+      } catch {
+        // 저장 실패해도 화면 상태는 유지
+      }
+    }
+  };
+
+  const submitLogout = async () => {
+    try {
+      const supabase = getSupabaseBrowserClient();
+      await supabase.auth.signOut();
+      setIsLoginOpen(false);
+      setIsProfileOpen(false);
+      setProfileUsername("");
+      setLoginMessage("");
+    } catch {
+      // 로그아웃 실패 시에도 onAuthStateChange가 상태를 맞춤
+    }
+  };
+
+  const toggleProfileMenu = () => {
+    setIsProfileOpen((prev) => !prev);
   };
 
   const openLoginScreen = () => {
@@ -289,28 +495,74 @@ export default function Home() {
     setLoginMessage("");
   };
 
+  const normalizeAuthEmail = (idOrEmail: string) => {
+    const trimmed = idOrEmail.trim();
+    if (trimmed.includes("@")) {
+      return trimmed;
+    }
+    return `${trimmed}@birdy.local`;
+  };
+
   const submitLogin = async () => {
-    if (!loginEmail.trim() || !loginPassword.trim()) {
-      setLoginMessage("이메일과 비밀번호를 입력해 주세요.");
+    if (!loginId.trim() || !loginPassword.trim()) {
+      setLoginMessage("아이디와 비밀번호를 입력해 주세요.");
       return;
     }
     try {
       setIsLoginSubmitting(true);
       setLoginMessage("");
       const supabase = getSupabaseBrowserClient();
+      const loginAsEmail = normalizeAuthEmail(loginId);
       const { error } = await supabase.auth.signInWithPassword({
-        email: loginEmail.trim(),
+        email: loginAsEmail,
         password: loginPassword,
       });
       if (error) {
         setLoginMessage(`로그인 실패: ${error.message}`);
         return;
       }
-      setLoginMessage("로그인 성공!");
+      setLoginMessage("로그인 성공! 내 정원 데이터를 불러왔어요.");
       setIsLoginOpen(false);
+      setProfileUsername(loginId.trim() || displayIdFromAuthEmail(loginAsEmail));
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.user.id) {
+        setUserId(sessionData.session.user.id);
+        await loadGardenForUser(sessionData.session.user.id, { mergeGuestIfEmpty: true });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "알 수 없는 오류";
       setLoginMessage(`로그인 실패: ${message}`);
+    } finally {
+      setIsLoginSubmitting(false);
+    }
+  };
+
+  const submitSignUp = async () => {
+    if (!loginId.trim() || !loginPassword.trim()) {
+      setLoginMessage("회원가입할 아이디와 비밀번호를 입력해 주세요.");
+      return;
+    }
+    if (loginPassword.length < 6) {
+      setLoginMessage("비밀번호는 6자 이상으로 입력해 주세요.");
+      return;
+    }
+    try {
+      setIsLoginSubmitting(true);
+      setLoginMessage("");
+      const supabase = getSupabaseBrowserClient();
+      const signUpEmail = normalizeAuthEmail(loginId);
+      const { error } = await supabase.auth.signUp({
+        email: signUpEmail,
+        password: loginPassword,
+      });
+      if (error) {
+        setLoginMessage(`회원가입 실패: ${error.message}`);
+        return;
+      }
+      setLoginMessage("회원가입 완료! 이제 같은 아이디/비밀번호로 로그인해 보세요.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "알 수 없는 오류";
+      setLoginMessage(`회원가입 실패: ${message}`);
     } finally {
       setIsLoginSubmitting(false);
     }
@@ -350,9 +602,11 @@ export default function Home() {
                 <span className="menu-item-label">{item.label}</span>
               </button>
             ))}
-            <button type="button" className="menu-login-button" onClick={openLoginScreen}>
-              로그인
-            </button>
+            {!isLoggedIn ? (
+              <button type="button" className="menu-login-button" onClick={openLoginScreen}>
+                로그인
+              </button>
+            ) : null}
           </div>
           <div className="menu-handle" aria-hidden>
             {isMenuOpen ? (
@@ -385,6 +639,40 @@ export default function Home() {
         <button type="button" className="add-bird-button" onClick={openBirdList}>
           + 오늘의 새 추가하기
         </button>
+
+        <div className="profile-corner" ref={profileMenuRef}>
+          {!isLoggedIn ? (
+            <button type="button" className="floating-login-button" onClick={openLoginScreen}>
+              로그인
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="profile-trigger-button"
+                onClick={toggleProfileMenu}
+                aria-label="프로필 메뉴"
+                aria-expanded={isProfileOpen}
+                aria-haspopup="true"
+              >
+                <span className="profile-avatar profile-avatar--small" aria-hidden>
+                  <span className="profile-avatar-initial">{profileInitial}</span>
+                </span>
+              </button>
+              {isProfileOpen ? (
+                <div className="profile-menu" role="dialog" aria-label="프로필">
+                  <span className="profile-avatar profile-avatar--large" aria-hidden>
+                    <span className="profile-avatar-initial">{profileInitial}</span>
+                  </span>
+                  <p className="profile-menu-id">{profileUsername || "사용자"}</p>
+                  <button type="button" className="profile-menu-logout" onClick={submitLogout}>
+                    로그아웃
+                  </button>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
 
         {isBirdListOpen ? (
           <div className="bird-list-screen" role="dialog" aria-modal="true" aria-label="조류 목록">
@@ -689,24 +977,37 @@ export default function Home() {
             </header>
 
             <div className="bird-login-body">
+              <label className="bird-login-label" htmlFor="login-id-input">
+                아이디
+              </label>
               <input
-                type="email"
+                id="login-id-input"
+                type="text"
                 className="bird-login-input"
-                placeholder="이메일"
-                value={loginEmail}
-                onChange={(event) => setLoginEmail(event.target.value)}
-                autoComplete="email"
+                placeholder="아이디를 입력하세요"
+                value={loginId}
+                onChange={(event) => setLoginId(event.target.value)}
+                autoComplete="username"
+                inputMode="text"
+                spellCheck={false}
               />
+              <label className="bird-login-label" htmlFor="login-password-input">
+                비밀번호
+              </label>
               <input
+                id="login-password-input"
                 type="password"
                 className="bird-login-input"
-                placeholder="비밀번호"
+                placeholder="비밀번호를 입력하세요"
                 value={loginPassword}
                 onChange={(event) => setLoginPassword(event.target.value)}
                 autoComplete="current-password"
               />
               <button type="button" className="bird-login-submit" onClick={submitLogin} disabled={isLoginSubmitting}>
                 {isLoginSubmitting ? "로그인 중..." : "로그인"}
+              </button>
+              <button type="button" className="bird-login-signup-link" onClick={submitSignUp} disabled={isLoginSubmitting}>
+                회원가입하기
               </button>
               {loginMessage ? <p className="bird-login-message">{loginMessage}</p> : null}
             </div>
