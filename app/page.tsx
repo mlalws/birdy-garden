@@ -1,7 +1,15 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
   loadUserGarden,
@@ -19,11 +27,12 @@ type MenuItem = {
 type ListBird = {
   id: string;
   name: string;
+  imageSrc?: string;
   isPlaceholder?: boolean;
 };
 
 const BIRD_LIST_ITEMS: ListBird[] = [
-  { id: "mallard", name: "청둥오리" },
+  { id: "mallard", name: "청둥오리", imageSrc: "/test.png" },
   { id: "ph1", name: "", isPlaceholder: true },
   { id: "ph2", name: "", isPlaceholder: true },
   { id: "ph3", name: "", isPlaceholder: true },
@@ -87,6 +96,7 @@ export default function Home() {
   const [isBirdListOpen, setIsBirdListOpen] = useState(false);
   const [selectedListBirdId, setSelectedListBirdId] = useState<string | null>(null);
   const [isBirdInfoScreenOpen, setIsBirdInfoScreenOpen] = useState(false);
+  const [birdRegistrationMode, setBirdRegistrationMode] = useState<"listed" | "unlisted">("listed");
   const [isPhotoPopupOpen, setIsPhotoPopupOpen] = useState(false);
   const [canOpenPhotoPopup, setCanOpenPhotoPopup] = useState(true);
   const [birdName, setBirdName] = useState("청둥오리");
@@ -100,8 +110,10 @@ export default function Home() {
   const [isGardenSyncing, setIsGardenSyncing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [loginId, setLoginId] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
   const [loginMessage, setLoginMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -335,6 +347,7 @@ export default function Home() {
   const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
+    setBirdRegistrationMode("listed");
     setBirdName("청둥오리");
     setBirdFeature("");
     setBirdCount(1);
@@ -358,10 +371,13 @@ export default function Home() {
     setSelectedListBirdId(null);
   };
 
-  const openBirdRegistration = (opts?: { name?: string }) => {
-    const nextName = opts?.name !== undefined ? opts.name : "청둥오리";
+  const openBirdRegistration = (opts?: { name?: string; mode?: "listed" | "unlisted" }) => {
+    const mode = opts?.mode ?? "listed";
+    const nextName =
+      mode === "unlisted" ? "" : opts?.name !== undefined ? opts.name : "청둥오리";
     setIsBirdListOpen(false);
     setSelectedListBirdId(null);
+    setBirdRegistrationMode(mode);
     setIsBirdInfoScreenOpen(true);
     setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
@@ -371,12 +387,16 @@ export default function Home() {
     setPhotoPreviewUrl(null);
   };
 
+  const openUnlistedBirdRegistration = () => {
+    openBirdRegistration({ mode: "unlisted", name: "" });
+  };
+
   const goNextFromBirdList = () => {
     const item = BIRD_LIST_ITEMS.find((b) => b.id === selectedListBirdId);
     if (!item || item.isPlaceholder) {
       return;
     }
-    openBirdRegistration({ name: item.name });
+    openBirdRegistration({ name: item.name, mode: "listed" });
   };
 
   const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -445,11 +465,12 @@ export default function Home() {
   };
 
   const submitBirdRegistration = async () => {
-    const amount = Math.max(1, birdCount);
+    const isUnlisted = birdRegistrationMode === "unlisted";
+    const amount = isUnlisted ? 1 : Math.max(1, birdCount);
     const newBirds = createGardenBirds(amount, gardenBirds.length);
     const newRecord: BirdRecord = {
       id: `record-${Date.now()}`,
-      name: birdName.trim() || "청둥오리",
+      name: birdName.trim() || (isUnlisted ? "이름 없는 조류" : "청둥오리"),
       feature: birdFeature.trim(),
       photoUrl: photoPreviewUrl,
       count: amount,
@@ -489,10 +510,23 @@ export default function Home() {
     setIsProfileOpen((prev) => !prev);
   };
 
+  const resetAuthForm = () => {
+    setLoginMessage("");
+    setSignupPasswordConfirm("");
+  };
+
   const openLoginScreen = () => {
     setIsMenuOpen(false);
     setIsLoginOpen(true);
-    setLoginMessage("");
+    setAuthMode("login");
+    resetAuthForm();
+  };
+
+  const openSignUpScreen = () => {
+    setIsMenuOpen(false);
+    setIsLoginOpen(true);
+    setAuthMode("signup");
+    resetAuthForm();
   };
 
   const normalizeAuthEmail = (idOrEmail: string) => {
@@ -501,6 +535,37 @@ export default function Home() {
       return trimmed;
     }
     return `${trimmed}@birdy.local`;
+  };
+
+  const mapAuthErrorMessage = (message: string) => {
+    const lower = message.toLowerCase();
+    if (lower.includes("already registered") || lower.includes("already been registered")) {
+      return "이미 가입된 아이디예요. 로그인해 주세요.";
+    }
+    if (lower.includes("invalid login credentials")) {
+      return "아이디 또는 비밀번호가 맞지 않아요.";
+    }
+    if (lower.includes("email not confirmed")) {
+      return "이메일 인증이 필요해요. Supabase에서 이메일 확인을 끄거나 메일을 확인해 주세요.";
+    }
+    if (lower.includes("password")) {
+      return "비밀번호는 6자 이상으로 입력해 주세요.";
+    }
+    return message;
+  };
+
+  const completeAuthSession = async (displayId: string, successMessage: string) => {
+    setLoginMessage(successMessage);
+    setIsLoginOpen(false);
+    setAuthMode("login");
+    setSignupPasswordConfirm("");
+    setProfileUsername(displayId);
+    const supabase = getSupabaseBrowserClient();
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session?.user.id) {
+      setUserId(sessionData.session.user.id);
+      await loadGardenForUser(sessionData.session.user.id, { mergeGuestIfEmpty: true });
+    }
   };
 
   const submitLogin = async () => {
@@ -518,53 +583,85 @@ export default function Home() {
         password: loginPassword,
       });
       if (error) {
-        setLoginMessage(`로그인 실패: ${error.message}`);
+        setLoginMessage(`로그인 실패: ${mapAuthErrorMessage(error.message)}`);
         return;
       }
-      setLoginMessage("로그인 성공! 내 정원 데이터를 불러왔어요.");
-      setIsLoginOpen(false);
-      setProfileUsername(loginId.trim() || displayIdFromAuthEmail(loginAsEmail));
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session?.user.id) {
-        setUserId(sessionData.session.user.id);
-        await loadGardenForUser(sessionData.session.user.id, { mergeGuestIfEmpty: true });
-      }
+      await completeAuthSession(
+        loginId.trim() || displayIdFromAuthEmail(loginAsEmail),
+        "로그인 성공! 내 정원 데이터를 불러왔어요."
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "알 수 없는 오류";
-      setLoginMessage(`로그인 실패: ${message}`);
+      setLoginMessage(`로그인 실패: ${mapAuthErrorMessage(message)}`);
     } finally {
       setIsLoginSubmitting(false);
     }
   };
 
   const submitSignUp = async () => {
-    if (!loginId.trim() || !loginPassword.trim()) {
-      setLoginMessage("회원가입할 아이디와 비밀번호를 입력해 주세요.");
+    const trimmedId = loginId.trim();
+    if (!trimmedId || !loginPassword.trim()) {
+      setLoginMessage("아이디와 비밀번호를 입력해 주세요.");
+      return;
+    }
+    if (trimmedId.length < 2) {
+      setLoginMessage("아이디는 2자 이상으로 입력해 주세요.");
       return;
     }
     if (loginPassword.length < 6) {
       setLoginMessage("비밀번호는 6자 이상으로 입력해 주세요.");
       return;
     }
+    if (loginPassword !== signupPasswordConfirm) {
+      setLoginMessage("비밀번호 확인이 일치하지 않아요.");
+      return;
+    }
     try {
       setIsLoginSubmitting(true);
       setLoginMessage("");
       const supabase = getSupabaseBrowserClient();
-      const signUpEmail = normalizeAuthEmail(loginId);
-      const { error } = await supabase.auth.signUp({
+      const signUpEmail = normalizeAuthEmail(trimmedId);
+      const { data, error } = await supabase.auth.signUp({
         email: signUpEmail,
         password: loginPassword,
+        options: {
+          data: {
+            username: trimmedId,
+          },
+        },
       });
       if (error) {
-        setLoginMessage(`회원가입 실패: ${error.message}`);
+        setLoginMessage(`회원가입 실패: ${mapAuthErrorMessage(error.message)}`);
         return;
       }
-      setLoginMessage("회원가입 완료! 이제 같은 아이디/비밀번호로 로그인해 보세요.");
+
+      if (data.session?.user?.id) {
+        await completeAuthSession(trimmedId, "회원가입 완료! 환영해요.");
+        return;
+      }
+
+      if (data.user?.identities && data.user.identities.length === 0) {
+        setLoginMessage("이미 가입된 아이디예요. 로그인해 주세요.");
+        setAuthMode("login");
+        return;
+      }
+
+      setLoginMessage("회원가입 완료! 아래에서 로그인해 주세요.");
+      setAuthMode("login");
     } catch (error) {
       const message = error instanceof Error ? error.message : "알 수 없는 오류";
-      setLoginMessage(`회원가입 실패: ${message}`);
+      setLoginMessage(`회원가입 실패: ${mapAuthErrorMessage(message)}`);
     } finally {
       setIsLoginSubmitting(false);
+    }
+  };
+
+  const handleAuthFormSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (authMode === "signup") {
+      void submitSignUp();
+    } else {
+      void submitLogin();
     }
   };
 
@@ -691,7 +788,7 @@ export default function Home() {
               <button
                 type="button"
                 className="bird-list-add-unlisted"
-                onClick={() => openBirdRegistration({ name: "" })}
+                onClick={openUnlistedBirdRegistration}
               >
                 리스트에 없는 조류 추가
               </button>
@@ -720,7 +817,17 @@ export default function Home() {
                     }}
                   >
                     <div className="bird-list-thumb">
-                      <span>새 사진</span>
+                      {item.imageSrc ? (
+                        <Image
+                          src={item.imageSrc}
+                          alt={item.name}
+                          fill
+                          sizes="72px"
+                          className="bird-list-thumb-img"
+                        />
+                      ) : (
+                        <span>새 사진</span>
+                      )}
                     </div>
                     <div className="bird-list-text">
                       <span className="bird-list-name">{item.name}</span>
@@ -745,7 +852,141 @@ export default function Home() {
           </div>
         ) : null}
 
-        {isBirdInfoScreenOpen ? (
+        {isBirdInfoScreenOpen && birdRegistrationMode === "unlisted" ? (
+          <div className="bird-new-register-screen" role="dialog" aria-modal="true" aria-label="신규 조류 등록">
+            <header className="bird-new-register-header">
+              <button
+                type="button"
+                className="bird-new-register-back"
+                onClick={backFromBirdFormToList}
+                aria-label="조류 목록으로 돌아가기"
+              >
+                <img
+                  src="/left.png"
+                  alt=""
+                  width={48}
+                  height={48}
+                  decoding="sync"
+                  fetchPriority="high"
+                  className="bird-new-register-back-img"
+                />
+              </button>
+              <div className="bird-new-register-title-plank">
+                <span className="bird-new-register-star bird-new-register-star--left" aria-hidden>
+                  ★
+                </span>
+                <span className="bird-new-register-star bird-new-register-star--right" aria-hidden>
+                  ★
+                </span>
+                <h1 className="bird-new-register-title">신규 조류 등록!!</h1>
+              </div>
+            </header>
+
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+              onChange={handlePhotoFileChange}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              aria-hidden
+              tabIndex={-1}
+              onChange={handlePhotoFileChange}
+            />
+
+            <div className="bird-new-register-scroll">
+              <div className="bird-new-register-panel">
+                <div className="bird-new-register-photo-box">
+                  {isPhotoPopupOpen && !photoPreviewUrl && canOpenPhotoPopup ? (
+                    <div className="bird-new-register-photo-popup" role="group" aria-label="사진 선택">
+                      <button
+                        type="button"
+                        className="bird-new-register-photo-popup-btn"
+                        onClick={() => cameraInputRef.current?.click()}
+                      >
+                        촬영하기
+                      </button>
+                      <button
+                        type="button"
+                        className="bird-new-register-photo-popup-btn"
+                        onClick={() => galleryInputRef.current?.click()}
+                      >
+                        사진 업로드
+                      </button>
+                    </div>
+                  ) : null}
+                  <div
+                    className="bird-new-register-photo-hit"
+                    role="button"
+                    tabIndex={0}
+                    onClick={togglePhotoPopupFromHit}
+                    onKeyDown={onPhotoHitKeyDown}
+                    aria-label="사진 찍기"
+                  >
+                    {photoPreviewUrl ? (
+                      <span className="bird-new-register-photo-preview-wrap">
+                        <button
+                          type="button"
+                          className="bird-photo-remove"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            clearPhotoPreview();
+                          }}
+                          aria-label="선택한 사진 지우기"
+                        >
+                          ×
+                        </button>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photoPreviewUrl}
+                          alt="선택한 새 사진 미리보기"
+                          className="bird-new-register-photo-preview"
+                        />
+                      </span>
+                    ) : (
+                      <span className="bird-new-register-photo-label">사진 찍기</span>
+                    )}
+                  </div>
+                </div>
+
+                <input
+                  id="bird-new-name-input"
+                  type="text"
+                  className="bird-new-register-name-input"
+                  placeholder="이름 입력"
+                  value={birdName}
+                  onChange={(e) => setBirdName(e.target.value)}
+                  aria-label="이름 입력"
+                  autoComplete="off"
+                />
+
+                <label className="bird-new-register-desc-label" htmlFor="bird-new-desc-input">
+                  설명 입력:
+                </label>
+                <textarea
+                  id="bird-new-desc-input"
+                  className="bird-new-register-desc-input"
+                  value={birdFeature}
+                  onChange={(e) => setBirdFeature(e.target.value)}
+                  rows={4}
+                  aria-label="설명 입력"
+                />
+
+                <button type="button" className="bird-new-register-submit" onClick={submitBirdRegistration}>
+                  목록에 추가하기
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : isBirdInfoScreenOpen ? (
           <div className="bird-form-screen" role="dialog" aria-modal="true" aria-label="조류 등록">
             <header className="bird-form-header">
               <button
@@ -968,15 +1209,15 @@ export default function Home() {
         ) : null}
 
         {isLoginOpen ? (
-          <div className="bird-login-screen" role="dialog" aria-modal="true" aria-label="로그인">
+          <div className="bird-login-screen" role="dialog" aria-modal="true" aria-label={authMode === "signup" ? "회원가입" : "로그인"}>
             <header className="bird-login-header">
               <button type="button" className="bird-login-close" onClick={() => setIsLoginOpen(false)} aria-label="로그인 닫기">
                 <img src="/x.png" alt="" width={48} height={48} decoding="sync" className="bird-login-close-img" />
               </button>
-              <h2 className="bird-login-title">로그인</h2>
+              <h2 className="bird-login-title">{authMode === "signup" ? "회원가입" : "로그인"}</h2>
             </header>
 
-            <div className="bird-login-body">
+            <form className="bird-login-body" onSubmit={handleAuthFormSubmit}>
               <label className="bird-login-label" htmlFor="login-id-input">
                 아이디
               </label>
@@ -998,19 +1239,64 @@ export default function Home() {
                 id="login-password-input"
                 type="password"
                 className="bird-login-input"
-                placeholder="비밀번호를 입력하세요"
+                placeholder={authMode === "signup" ? "6자 이상 비밀번호" : "비밀번호를 입력하세요"}
                 value={loginPassword}
                 onChange={(event) => setLoginPassword(event.target.value)}
-                autoComplete="current-password"
+                autoComplete={authMode === "signup" ? "new-password" : "current-password"}
               />
-              <button type="button" className="bird-login-submit" onClick={submitLogin} disabled={isLoginSubmitting}>
-                {isLoginSubmitting ? "로그인 중..." : "로그인"}
+              {authMode === "signup" ? (
+                <>
+                  <label className="bird-login-label" htmlFor="signup-password-confirm-input">
+                    비밀번호 확인
+                  </label>
+                  <input
+                    id="signup-password-confirm-input"
+                    type="password"
+                    className="bird-login-input"
+                    placeholder="비밀번호를 다시 입력하세요"
+                    value={signupPasswordConfirm}
+                    onChange={(event) => setSignupPasswordConfirm(event.target.value)}
+                    autoComplete="new-password"
+                  />
+                </>
+              ) : null}
+              <button type="submit" className="bird-login-submit" disabled={isLoginSubmitting}>
+                {isLoginSubmitting
+                  ? authMode === "signup"
+                    ? "가입 중..."
+                    : "로그인 중..."
+                  : authMode === "signup"
+                    ? "회원가입"
+                    : "로그인"}
               </button>
-              <button type="button" className="bird-login-signup-link" onClick={submitSignUp} disabled={isLoginSubmitting}>
-                회원가입하기
-              </button>
+              {authMode === "login" ? (
+                <button
+                  type="button"
+                  className="bird-login-signup-link"
+                  onClick={() => {
+                    setAuthMode("signup");
+                    setLoginMessage("");
+                  }}
+                  disabled={isLoginSubmitting}
+                >
+                  회원가입하기
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="bird-login-signup-link"
+                  onClick={() => {
+                    setAuthMode("login");
+                    setLoginMessage("");
+                    setSignupPasswordConfirm("");
+                  }}
+                  disabled={isLoginSubmitting}
+                >
+                  이미 계정이 있어요? 로그인하기
+                </button>
+              )}
               {loginMessage ? <p className="bird-login-message">{loginMessage}</p> : null}
-            </div>
+            </form>
           </div>
         ) : null}
       </section>
