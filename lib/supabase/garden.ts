@@ -1,4 +1,7 @@
+import { normalizeUserProfile, type UserProfile } from "@/lib/profile";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+export type { UserProfile } from "@/lib/profile";
 
 export type PlacedBird = {
   id: string;
@@ -20,6 +23,7 @@ export type UserGardenPayload = {
   birds: PlacedBird[];
   records: BirdRecord[];
   dexSeenSpecies?: string[];
+  profile?: UserProfile;
 };
 
 const EMPTY_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexSeenSpecies: [] };
@@ -73,7 +77,9 @@ function normalizePayload(raw: unknown): UserGardenPayload {
       )
     : [];
 
-  return { birds, records, dexSeenSpecies };
+  const profile = normalizeUserProfile((obj as { profile?: unknown }).profile) ?? undefined;
+
+  return { birds, records, dexSeenSpecies, profile };
 }
 
 export async function loadUserGarden(userId: string): Promise<UserGardenPayload> {

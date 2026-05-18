@@ -829,7 +829,7 @@ body {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  min-width: 168px;
+  min-width: 200px;
   padding: 14px 14px 12px;
   border: 1px solid rgba(139, 94, 60, 0.45);
   border-radius: 14px;
@@ -848,6 +848,85 @@ body {
   font-weight: 800;
   text-align: center;
   word-break: break-all;
+}
+
+.profile-menu-edit {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(139, 94, 60, 0.45);
+  border-radius: 10px;
+  background: #fffdf8;
+  color: #5c3d24;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.profile-menu-edit:hover {
+  background: #f7efe3;
+}
+
+.profile-menu-edit-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-menu-edit-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a5538;
+}
+
+.profile-menu-edit-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(139, 94, 60, 0.45);
+  border-radius: 10px;
+  background: #fffdf8;
+  color: #5c3d24;
+  font-size: 13px;
+}
+
+.profile-menu-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.profile-menu-edit-save,
+.profile-menu-edit-cancel {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.profile-menu-edit-save {
+  border: none;
+  background: #8b5c3a;
+  color: #fff9f4;
+}
+
+.profile-menu-edit-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.profile-menu-edit-cancel {
+  border: 1px solid rgba(139, 94, 60, 0.45);
+  background: #fffdf8;
+  color: #5c3d24;
+}
+
+.profile-menu-message {
+  margin: 0;
+  color: #7a5538;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .profile-menu-logout {

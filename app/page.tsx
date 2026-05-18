@@ -17,6 +17,13 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import {
+  applyNicknameChange,
+  canChangeNickname,
+  generateRandomNickname,
+  validateNicknameInput,
+  type UserProfile,
+} from "@/lib/profile";
+import {
   loadUserGarden,
   saveUserGarden,
   type BirdRecord,
@@ -207,7 +214,12 @@ export default function Home() {
   const [loginMessage, setLoginMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [profileUsername, setProfileUsername] = useState("");
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isNicknameEditing, setIsNicknameEditing] = useState(false);
+  const [nicknameDraft, setNicknameDraft] = useState("");
+  const [profileEditMessage, setProfileEditMessage] = useState("");
+  const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [registrationConfirm, setRegistrationConfirm] = useState<RegistrationConfirmPayload | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -225,7 +237,13 @@ export default function Home() {
     return trimmed.slice(0, 1).toUpperCase();
   }, [profileUsername]);
 
-  const syncProfileFromSession = (email: string | undefined | null) => {
+  const applyProfileDisplay = (profile: UserProfile | null, email?: string | null) => {
+    if (profile?.nickname) {
+      setUserProfile(profile);
+      setProfileUsername(profile.nickname);
+      return;
+    }
+    setUserProfile(null);
     setProfileUsername(displayIdFromAuthEmail(email));
   };
 
@@ -301,6 +319,7 @@ export default function Home() {
     birds: gardenBirds,
     records: birdRecords,
     dexSeenSpecies,
+    ...(userProfile ? { profile: userProfile } : {}),
   });
 
   const dexDisplayEntries = useMemo(
@@ -308,7 +327,10 @@ export default function Home() {
     [birdRecords, dexSeenSpecies]
   );
 
-  const loadGardenForUser = async (uid: string, options?: { mergeSessionGuestIfEmpty?: boolean }) => {
+  const loadGardenForUser = async (
+    uid: string,
+    options?: { mergeSessionGuestIfEmpty?: boolean; emailFallback?: string | null }
+  ) => {
     setIsGardenSyncing(true);
     try {
       const payload = await loadUserGarden(uid);
@@ -318,19 +340,41 @@ export default function Home() {
           birds: sessionGuest.birds,
           records: sessionGuest.records,
           dexSeenSpecies: sessionGuest.dexSeenSpecies ?? [],
+          profile: payload.profile,
         };
         applyGardenPayload(merged);
         await saveUserGarden(uid, merged);
         guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
         clearLegacyGuestStorage();
+        applyProfileDisplay(merged.profile ?? null, options?.emailFallback);
         return;
       }
       applyGardenPayload(payload);
+      applyProfileDisplay(payload.profile ?? null, options?.emailFallback);
     } catch {
       applyGardenPayload(EMPTY_GARDEN_PAYLOAD);
+      applyProfileDisplay(null, options?.emailFallback);
     } finally {
       setIsGardenSyncing(false);
     }
+  };
+
+  const ensureSignupProfile = async (uid: string) => {
+    const payload = await loadUserGarden(uid);
+    if (payload.profile?.nickname) {
+      setUserProfile(payload.profile);
+      setProfileUsername(payload.profile.nickname);
+      return;
+    }
+    const profile: UserProfile = {
+      nickname: generateRandomNickname(),
+      nicknameEditCount: 0,
+      nicknameLastChangedAt: null,
+    };
+    const merged: UserGardenPayload = { ...payload, profile };
+    await saveUserGarden(uid, merged);
+    setUserProfile(profile);
+    setProfileUsername(profile.nickname);
   };
 
   useEffect(() => {
@@ -354,12 +398,16 @@ export default function Home() {
         if (!unsubscribed) {
           const initialUserId = session?.user.id ?? null;
           setIsLoggedIn(!!session);
-          syncProfileFromSession(session?.user.email);
           setUserId(initialUserId);
           if (initialUserId) {
-            await loadGardenForUser(initialUserId, { mergeSessionGuestIfEmpty: true });
+            await loadGardenForUser(initialUserId, {
+              mergeSessionGuestIfEmpty: true,
+              emailFallback: session?.user.email,
+            });
           } else {
             resetGuestGarden();
+            setUserProfile(null);
+            setProfileUsername("");
           }
           if (!unsubscribed) {
             setIsGardenHydrated(true);
@@ -367,17 +415,22 @@ export default function Home() {
         }
         const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
           setIsLoggedIn(!!nextSession);
-          syncProfileFromSession(nextSession?.user.email);
           if (!nextSession) {
             setIsProfileOpen(false);
+            setIsNicknameEditing(false);
+            setProfileEditMessage("");
             setProfileUsername("");
+            setUserProfile(null);
             setRegistrationConfirm(null);
             resetGuestGarden();
           }
           const nextUserId = nextSession?.user.id ?? null;
           setUserId(nextUserId);
           if (nextUserId) {
-            await loadGardenForUser(nextUserId, { mergeSessionGuestIfEmpty: true });
+            await loadGardenForUser(nextUserId, {
+              mergeSessionGuestIfEmpty: true,
+              emailFallback: nextSession?.user.email,
+            });
           }
         });
         return () => {
@@ -388,6 +441,7 @@ export default function Home() {
           setIsLoggedIn(false);
           setUserId(null);
           setProfileUsername("");
+          setUserProfile(null);
           setIsProfileOpen(false);
           resetGuestGarden();
           setIsGardenHydrated(true);
@@ -442,7 +496,7 @@ export default function Home() {
         clearTimeout(saveGardenTimerRef.current);
       }
     };
-  }, [gardenBirds, birdRecords, dexSeenSpecies, isGardenHydrated, isGardenSyncing, userId]);
+  }, [gardenBirds, birdRecords, dexSeenSpecies, userProfile, isGardenHydrated, isGardenSyncing, userId]);
 
   const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
@@ -627,7 +681,10 @@ export default function Home() {
       await supabase.auth.signOut();
       setIsLoginOpen(false);
       setIsProfileOpen(false);
+      setIsNicknameEditing(false);
+      setProfileEditMessage("");
       setProfileUsername("");
+      setUserProfile(null);
       setLoginMessage("");
     } catch {
       // 로그아웃 실패 시에도 onAuthStateChange가 상태를 맞춤
@@ -635,7 +692,84 @@ export default function Home() {
   };
 
   const toggleProfileMenu = () => {
-    setIsProfileOpen((prev) => !prev);
+    setIsProfileOpen((prev) => {
+      if (prev) {
+        setIsNicknameEditing(false);
+        setProfileEditMessage("");
+      }
+      return !prev;
+    });
+  };
+
+  const resolveEditableProfile = (): UserProfile => {
+    if (userProfile) {
+      return userProfile;
+    }
+    return {
+      nickname: profileUsername || "사용자",
+      nicknameEditCount: 0,
+      nicknameLastChangedAt: null,
+    };
+  };
+
+  const openNicknameEditor = () => {
+    const profile = resolveEditableProfile();
+    const check = canChangeNickname(profile);
+    if (!check.ok) {
+      setProfileEditMessage(check.message);
+      setIsNicknameEditing(false);
+      return;
+    }
+    setProfileEditMessage("");
+    setNicknameDraft(profile.nickname);
+    setIsNicknameEditing(true);
+  };
+
+  const cancelNicknameEdit = () => {
+    setIsNicknameEditing(false);
+    setNicknameDraft("");
+    setProfileEditMessage("");
+  };
+
+  const submitNicknameChange = async () => {
+    if (!userId) {
+      return;
+    }
+    const validationError = validateNicknameInput(nicknameDraft);
+    if (validationError) {
+      setProfileEditMessage(validationError);
+      return;
+    }
+    const trimmed = nicknameDraft.trim();
+    const baseProfile = resolveEditableProfile();
+    if (trimmed === baseProfile.nickname) {
+      setProfileEditMessage("현재 닉네임과 같아요.");
+      return;
+    }
+    const check = canChangeNickname(baseProfile);
+    if (!check.ok) {
+      setProfileEditMessage(check.message);
+      return;
+    }
+    try {
+      setIsProfileSaving(true);
+      const updated = applyNicknameChange(baseProfile, trimmed);
+      const payload: UserGardenPayload = {
+        birds: gardenBirds,
+        records: birdRecords,
+        dexSeenSpecies,
+        profile: updated,
+      };
+      await saveUserGarden(userId, payload);
+      setUserProfile(updated);
+      setProfileUsername(updated.nickname);
+      setIsNicknameEditing(false);
+      setProfileEditMessage("닉네임을 저장했어요.");
+    } catch {
+      setProfileEditMessage("저장에 실패했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsProfileSaving(false);
+    }
   };
 
   const resetAuthForm = () => {
@@ -658,6 +792,23 @@ export default function Home() {
   };
 
   const sanitizeAuthId = (id: string) => id.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+
+  const validateAuthEmailInput = (value: string): string | null => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "이메일과 비밀번호를 입력해 주세요.";
+    }
+    if (trimmed.includes("@")) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        return "이메일 형식이 올바르지 않아요.";
+      }
+      return null;
+    }
+    if (sanitizeAuthId(trimmed).length < 2) {
+      return "이메일을 입력해 주세요.";
+    }
+    return null;
+  };
 
   const normalizeAuthEmail = (idOrEmail: string) => {
     const trimmed = idOrEmail.trim();
@@ -687,16 +838,16 @@ export default function Home() {
   const mapAuthErrorMessage = (message: string) => {
     const lower = message.toLowerCase();
     if (lower.includes("invalid_auth_id") || lower.includes("invalid auth")) {
-      return "아이디는 영문, 숫자, _(밑줄)만 사용할 수 있어요.";
+      return "이메일 형식이 올바르지 않아요.";
     }
     if (lower.includes("already registered") || lower.includes("already been registered")) {
-      return "이미 가입된 아이디예요. 로그인해 주세요.";
+      return "이미 가입된 이메일이에요. 로그인해 주세요.";
     }
     if (lower.includes("invalid login credentials")) {
-      return "아이디 또는 비밀번호가 맞지 않아요.";
+      return "이메일 또는 비밀번호가 맞지 않아요.";
     }
     if (lower.includes("email_address_invalid") || lower.includes("invalid email")) {
-      return "아이디는 영문·숫자·_(밑줄)만 사용해 주세요. 실제 이메일은 필요 없어요.";
+      return "이메일 형식이 올바르지 않아요.";
     }
     if (lower.includes("email not confirmed") || lower.includes("email_address_not_authorized")) {
       return "이메일 확인이 켜져 있어요. Supabase 대시보드에서 Confirm email을 끄거나, 가입 메일을 확인해 주세요.";
@@ -725,23 +876,28 @@ export default function Home() {
     return message;
   };
 
-  const completeAuthSession = async (displayId: string, successMessage: string) => {
+  const completeAuthSession = async (successMessage: string, options?: { isNewSignup?: boolean }) => {
     setLoginMessage(successMessage);
     setIsLoginOpen(false);
     setAuthMode("login");
     setSignupPasswordConfirm("");
-    setProfileUsername(displayId);
     const supabase = getSupabaseBrowserClient();
     const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData.session?.user.id) {
-      setUserId(sessionData.session.user.id);
-      await loadGardenForUser(sessionData.session.user.id, { mergeSessionGuestIfEmpty: true });
+    const uid = sessionData.session?.user.id;
+    const email = sessionData.session?.user.email;
+    if (uid) {
+      setUserId(uid);
+      await loadGardenForUser(uid, { mergeSessionGuestIfEmpty: true, emailFallback: email });
+      if (options?.isNewSignup) {
+        await ensureSignupProfile(uid);
+      }
     }
   };
 
   const submitLogin = async () => {
-    if (!loginId.trim() || !loginPassword.trim()) {
-      setLoginMessage("아이디와 비밀번호를 입력해 주세요.");
+    const emailValidation = validateAuthEmailInput(loginId);
+    if (emailValidation || !loginPassword.trim()) {
+      setLoginMessage(emailValidation ?? "이메일과 비밀번호를 입력해 주세요.");
       return;
     }
     const configIssue = getSupabaseConfigIssue();
@@ -756,7 +912,7 @@ export default function Home() {
       const supabase = getSupabaseBrowserClient();
       const emails = authEmailsForLogin(loginId);
       if (emails.length === 0) {
-        setLoginMessage("아이디는 영문, 숫자, _(밑줄)만 사용할 수 있어요.");
+        setLoginMessage("이메일 형식이 올바르지 않아요.");
         return;
       }
 
@@ -779,10 +935,7 @@ export default function Home() {
         return;
       }
 
-      await completeAuthSession(
-        loginId.trim() || displayIdFromAuthEmail(emails[0]),
-        "로그인 성공! 내 정원 데이터를 불러왔어요."
-      );
+      await completeAuthSession("로그인 성공! 내 정원 데이터를 불러왔어요.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "알 수 없는 오류";
       setLoginMessage(`로그인 실패: ${mapAuthErrorMessage(message)}`);
@@ -793,12 +946,9 @@ export default function Home() {
 
   const submitSignUp = async () => {
     const trimmedId = loginId.trim();
-    if (!trimmedId || !loginPassword.trim()) {
-      setLoginMessage("아이디와 비밀번호를 입력해 주세요.");
-      return;
-    }
-    if (trimmedId.length < 2) {
-      setLoginMessage("아이디는 2자 이상으로 입력해 주세요.");
+    const emailValidation = validateAuthEmailInput(trimmedId);
+    if (emailValidation || !loginPassword.trim()) {
+      setLoginMessage(emailValidation ?? "이메일과 비밀번호를 입력해 주세요.");
       return;
     }
     if (loginPassword.length < 8) {
@@ -837,12 +987,12 @@ export default function Home() {
       }
 
       if (data.session?.user?.id) {
-        await completeAuthSession(trimmedId, "회원가입 완료! 환영해요.");
+        await completeAuthSession("회원가입 완료! 환영해요.", { isNewSignup: true });
         return;
       }
 
       if (data.user?.identities && data.user.identities.length === 0) {
-        setLoginMessage("이미 가입된 아이디예요. 로그인해 주세요.");
+        setLoginMessage("이미 가입된 이메일이에요. 로그인해 주세요.");
         setAuthMode("login");
         return;
       }
@@ -852,7 +1002,7 @@ export default function Home() {
         password: loginPassword,
       });
       if (!signInError && signInData.session?.user?.id) {
-        await completeAuthSession(trimmedId, "회원가입 완료! 환영해요.");
+        await completeAuthSession("회원가입 완료! 환영해요.", { isNewSignup: true });
         return;
       }
 
@@ -980,6 +1130,46 @@ export default function Home() {
                     <span className="profile-avatar-initial">{profileInitial}</span>
                   </span>
                   <p className="profile-menu-id">{profileUsername || "사용자"}</p>
+                  {!isNicknameEditing ? (
+                    <button type="button" className="profile-menu-edit" onClick={openNicknameEditor}>
+                      닉네임 수정
+                    </button>
+                  ) : (
+                    <div className="profile-menu-edit-form">
+                      <label className="profile-menu-edit-label" htmlFor="profile-nickname-input">
+                        닉네임
+                      </label>
+                      <input
+                        id="profile-nickname-input"
+                        type="text"
+                        className="profile-menu-edit-input"
+                        value={nicknameDraft}
+                        onChange={(event) => setNicknameDraft(event.target.value)}
+                        maxLength={12}
+                        autoComplete="nickname"
+                        disabled={isProfileSaving}
+                      />
+                      <div className="profile-menu-edit-actions">
+                        <button
+                          type="button"
+                          className="profile-menu-edit-save"
+                          onClick={() => void submitNicknameChange()}
+                          disabled={isProfileSaving}
+                        >
+                          {isProfileSaving ? "저장 중..." : "저장"}
+                        </button>
+                        <button
+                          type="button"
+                          className="profile-menu-edit-cancel"
+                          onClick={cancelNicknameEdit}
+                          disabled={isProfileSaving}
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {profileEditMessage ? <p className="profile-menu-message">{profileEditMessage}</p> : null}
                   <button type="button" className="profile-menu-logout" onClick={submitLogout}>
                     로그아웃
                   </button>
@@ -1511,17 +1701,17 @@ export default function Home() {
 
             <form className="bird-login-body" onSubmit={handleAuthFormSubmit}>
               <label className="bird-login-label" htmlFor="login-id-input">
-                아이디
+                이메일
               </label>
               <input
                 id="login-id-input"
-                type="text"
+                type="email"
                 className="bird-login-input"
-                placeholder="아이디를 입력하세요"
+                placeholder="이메일을 입력하세요"
                 value={loginId}
                 onChange={(event) => setLoginId(event.target.value)}
-                autoComplete="username"
-                inputMode="text"
+                autoComplete="email"
+                inputMode="email"
                 spellCheck={false}
               />
               <label className="bird-login-label" htmlFor="login-password-input">
