@@ -1673,10 +1673,10 @@ export default function Home() {
             <div className="bird-confirm-body">
               <div className="bird-confirm-photo-wrap">
                 <span className="bird-confirm-confetti bird-confirm-confetti--tl" aria-hidden>
-                  🎉
+                  🌿
                 </span>
                 <span className="bird-confirm-confetti bird-confirm-confetti--br" aria-hidden>
-                  🎉
+                  🪶
                 </span>
                 <div className="bird-confirm-photo-frame">
                   {registrationConfirm.photoUrl ? (
