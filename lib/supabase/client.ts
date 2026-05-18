@@ -70,10 +70,19 @@ export async function assertSupabaseReachable(): Promise<void> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), 12_000);
 
+  const anonKey = getSupabaseAnonKey();
+  if (!anonKey) {
+    throw new Error("Supabase anon key가 없습니다.");
+  }
+
   try {
     const response = await fetch(`${url}/auth/v1/health`, {
       method: "GET",
       signal: controller.signal,
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+      },
     });
     if (!response.ok) {
       throw new Error(`Supabase 서버 응답 오류 (${response.status})`);
