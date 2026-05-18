@@ -204,6 +204,15 @@ export default function Home() {
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const profileAvatarInputRef = useRef<HTMLInputElement>(null);
   const guestSessionPayloadRef = useRef<UserGardenPayload>(EMPTY_GARDEN_PAYLOAD);
+  const gardenLoadSeqRef = useRef(0);
+  const gardenDirtyRef = useRef(false);
+  const loadedGardenUserIdRef = useRef<string | null>(null);
+  const gardenSnapshotRef = useRef({
+    gardenBirds,
+    birdRecords,
+    dexSeenSpecies,
+    userProfile,
+  });
 
   const profileAvatarUrl = userProfile?.avatarUrl ?? null;
 
@@ -316,12 +325,22 @@ export default function Home() {
     clearLegacyGuestStorage();
   }, []);
 
-  const buildGardenPayload = (): UserGardenPayload => ({
-    birds: gardenBirds,
-    records: birdRecords,
-    dexSeenSpecies,
-    ...(userProfile ? { profile: userProfile } : {}),
+  useEffect(() => {
+    gardenSnapshotRef.current = { gardenBirds, birdRecords, dexSeenSpecies, userProfile };
+  }, [gardenBirds, birdRecords, dexSeenSpecies, userProfile]);
+
+  const buildGardenPayloadFromSnapshot = (snapshot = gardenSnapshotRef.current): UserGardenPayload => ({
+    birds: snapshot.gardenBirds,
+    records: snapshot.birdRecords,
+    dexSeenSpecies: snapshot.dexSeenSpecies,
+    ...(snapshot.userProfile ? { profile: snapshot.userProfile } : {}),
   });
+
+  const buildGardenPayload = (): UserGardenPayload => buildGardenPayloadFromSnapshot();
+
+  const markGardenDirty = () => {
+    gardenDirtyRef.current = true;
+  };
 
   const dexDisplayEntries = useMemo(
     () => buildDexDisplayEntries(birdRecords, dexSeenSpecies),
@@ -330,11 +349,20 @@ export default function Home() {
 
   const loadGardenForUser = async (
     uid: string,
-    options?: { mergeSessionGuestIfEmpty?: boolean; emailFallback?: string | null }
+    options?: { mergeSessionGuestIfEmpty?: boolean; emailFallback?: string | null; force?: boolean }
   ) => {
+    if (!options?.force && loadedGardenUserIdRef.current === uid) {
+      return;
+    }
+
+    const loadSeq = ++gardenLoadSeqRef.current;
     setIsGardenSyncing(true);
     try {
       const payload = await loadUserGarden(uid);
+      if (loadSeq !== gardenLoadSeqRef.current) {
+        return;
+      }
+
       const sessionGuest = options?.mergeSessionGuestIfEmpty ? guestSessionPayloadRef.current : EMPTY_GARDEN_PAYLOAD;
       if (payload.birds.length === 0 && sessionGuest.birds.length > 0) {
         const merged: UserGardenPayload = {
@@ -348,15 +376,24 @@ export default function Home() {
         guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
         clearLegacyGuestStorage();
         applyProfileDisplay(merged.profile ?? null, options?.emailFallback);
+        loadedGardenUserIdRef.current = uid;
+        gardenDirtyRef.current = false;
         return;
       }
       applyGardenPayload(payload);
       applyProfileDisplay(payload.profile ?? null, options?.emailFallback);
+      loadedGardenUserIdRef.current = uid;
+      gardenDirtyRef.current = false;
     } catch {
-      applyGardenPayload(EMPTY_GARDEN_PAYLOAD);
+      if (loadSeq !== gardenLoadSeqRef.current) {
+        return;
+      }
+      // 로드 실패 시 빈 정원으로 덮지 않음 (자동 저장이 DB를 비우는 것 방지)
       applyProfileDisplay(null, options?.emailFallback);
     } finally {
-      setIsGardenSyncing(false);
+      if (loadSeq === gardenLoadSeqRef.current) {
+        setIsGardenSyncing(false);
+      }
     }
   };
 
@@ -418,6 +455,8 @@ export default function Home() {
         const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
           setIsLoggedIn(!!nextSession);
           if (!nextSession) {
+            loadedGardenUserIdRef.current = null;
+            gardenDirtyRef.current = false;
             setIsProfileOpen(false);
             setIsNicknameEditing(false);
             setProfileEditMessage("");
@@ -425,13 +464,15 @@ export default function Home() {
             setUserProfile(null);
             setRegistrationConfirm(null);
             resetGuestGarden();
+            setUserId(null);
+            return;
           }
-          const nextUserId = nextSession?.user.id ?? null;
+          const nextUserId = nextSession.user.id;
           setUserId(nextUserId);
-          if (nextUserId) {
+          if (loadedGardenUserIdRef.current !== nextUserId) {
             await loadGardenForUser(nextUserId, {
               mergeSessionGuestIfEmpty: true,
-              emailFallback: nextSession?.user.email,
+              emailFallback: nextSession.user.email,
             });
           }
         });
@@ -475,6 +516,18 @@ export default function Home() {
     warm("/left.png");
   }, []);
 
+  const flushGardenSaveNow = async (uid: string) => {
+    if (!gardenDirtyRef.current) {
+      return;
+    }
+    try {
+      await saveUserGarden(uid, buildGardenPayloadFromSnapshot());
+      gardenDirtyRef.current = false;
+    } catch {
+      gardenDirtyRef.current = true;
+    }
+  };
+
   useEffect(() => {
     if (!isGardenHydrated || isGardenSyncing) {
       return;
@@ -485,13 +538,15 @@ export default function Home() {
       return;
     }
 
+    if (!gardenDirtyRef.current) {
+      return;
+    }
+
     if (saveGardenTimerRef.current) {
       clearTimeout(saveGardenTimerRef.current);
     }
     saveGardenTimerRef.current = setTimeout(() => {
-      void saveUserGarden(userId, buildGardenPayload()).catch(() => {
-        // 네트워크/권한 오류 시 UI는 유지
-      });
+      void flushGardenSaveNow(userId);
     }, 600);
     return () => {
       if (saveGardenTimerRef.current) {
@@ -499,6 +554,26 @@ export default function Home() {
       }
     };
   }, [gardenBirds, birdRecords, dexSeenSpecies, userProfile, isGardenHydrated, isGardenSyncing, userId]);
+
+  useEffect(() => {
+    const onPageHide = () => {
+      if (!userId) {
+        return;
+      }
+      void flushGardenSaveNow(userId);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        onPageHide();
+      }
+    };
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [userId]);
 
   const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
@@ -605,6 +680,7 @@ export default function Home() {
   const closeDex = () => {
     const unlocked = [...getUnlockedSpeciesNames(birdRecords)];
     if (unlocked.length > 0) {
+      markGardenDirty();
       setDexSeenSpecies((prev) => [...new Set([...prev, ...unlocked])]);
     }
     setIsDexOpen(false);
@@ -627,6 +703,8 @@ export default function Home() {
 
   const persistGarden = async (uid: string, payload: UserGardenPayload) => {
     await saveUserGarden(uid, payload);
+    loadedGardenUserIdRef.current = uid;
+    gardenDirtyRef.current = false;
   };
 
   const closeRegistrationConfirm = () => {
@@ -677,6 +755,7 @@ export default function Home() {
       }
     }
 
+    markGardenDirty();
     setGardenBirds(nextBirds);
     setBirdRecords(nextRecords);
     closeGardenBirdDetail();
@@ -690,7 +769,7 @@ export default function Home() {
           ...(userProfile ? { profile: userProfile } : {}),
         });
       } catch {
-        // UI는 이미 반영
+        gardenDirtyRef.current = true;
       }
     }
   };
@@ -714,6 +793,7 @@ export default function Home() {
     const nextRecords = [...birdRecords, newRecord];
     const totalSightings = countSpeciesSightings(nextRecords, displayName);
 
+    markGardenDirty();
     setGardenBirds(nextBirds);
     setBirdRecords(nextRecords);
     setIsBirdInfoScreenOpen(false);
@@ -733,7 +813,7 @@ export default function Home() {
           ...(userProfile ? { profile: userProfile } : {}),
         });
       } catch {
-        // 저장 실패해도 화면 상태는 유지
+        gardenDirtyRef.current = true;
       }
     }
   };
@@ -780,14 +860,12 @@ export default function Home() {
     if (!userId) {
       return;
     }
-    const payload: UserGardenPayload = {
-      birds: gardenBirds,
-      records: birdRecords,
-      dexSeenSpecies,
-      profile,
-    };
-    await saveUserGarden(userId, payload);
     setUserProfile(profile);
+    markGardenDirty();
+    await persistGarden(userId, {
+      ...buildGardenPayload(),
+      profile,
+    });
     setProfileEditMessage(message);
   };
 
