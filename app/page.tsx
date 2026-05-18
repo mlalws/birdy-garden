@@ -26,6 +26,7 @@ import {
 } from "@/lib/profile";
 import { readProfileImageAsDataUrl } from "@/lib/profile-image";
 import { createGardenBirds } from "@/lib/garden-birds";
+import { getGardenStorageErrorMessage } from "@/lib/supabase/garden-errors";
 import {
   loadUserGarden,
   saveUserGarden,
@@ -196,6 +197,7 @@ export default function Home() {
   const [registrationConfirm, setRegistrationConfirm] = useState<RegistrationConfirmPayload | null>(null);
   const [selectedGardenBirdId, setSelectedGardenBirdId] = useState<string | null>(null);
   const [gardenBirdDeleteConfirm, setGardenBirdDeleteConfirm] = useState(false);
+  const [gardenSyncError, setGardenSyncError] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -384,11 +386,13 @@ export default function Home() {
       applyProfileDisplay(payload.profile ?? null, options?.emailFallback);
       loadedGardenUserIdRef.current = uid;
       gardenDirtyRef.current = false;
-    } catch {
+      setGardenSyncError("");
+    } catch (error) {
       if (loadSeq !== gardenLoadSeqRef.current) {
         return;
       }
       // 로드 실패 시 빈 정원으로 덮지 않음 (자동 저장이 DB를 비우는 것 방지)
+      reportGardenSyncError(error);
       applyProfileDisplay(null, options?.emailFallback);
     } finally {
       if (loadSeq === gardenLoadSeqRef.current) {
@@ -523,8 +527,8 @@ export default function Home() {
     try {
       await saveUserGarden(uid, buildGardenPayloadFromSnapshot());
       gardenDirtyRef.current = false;
-    } catch {
-      gardenDirtyRef.current = true;
+    } catch (error) {
+      reportGardenSyncError(error);
     }
   };
 
@@ -705,6 +709,12 @@ export default function Home() {
     await saveUserGarden(uid, payload);
     loadedGardenUserIdRef.current = uid;
     gardenDirtyRef.current = false;
+    setGardenSyncError("");
+  };
+
+  const reportGardenSyncError = (error: unknown) => {
+    setGardenSyncError(getGardenStorageErrorMessage(error));
+    gardenDirtyRef.current = true;
   };
 
   const closeRegistrationConfirm = () => {
@@ -768,8 +778,8 @@ export default function Home() {
           dexSeenSpecies,
           ...(userProfile ? { profile: userProfile } : {}),
         });
-      } catch {
-        gardenDirtyRef.current = true;
+      } catch (error) {
+        reportGardenSyncError(error);
       }
     }
   };
@@ -812,8 +822,8 @@ export default function Home() {
           dexSeenSpecies,
           ...(userProfile ? { profile: userProfile } : {}),
         });
-      } catch {
-        gardenDirtyRef.current = true;
+      } catch (error) {
+        reportGardenSyncError(error);
       }
     }
   };
@@ -1294,6 +1304,12 @@ export default function Home() {
         <button type="button" className="add-bird-button" onClick={openBirdList}>
           + 오늘의 새 추가하기
         </button>
+
+        {gardenSyncError && isLoggedIn ? (
+          <p className="garden-sync-error" role="alert">
+            {gardenSyncError}
+          </p>
+        ) : null}
 
         {selectedGardenBird ? (
           <div
