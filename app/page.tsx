@@ -127,7 +127,8 @@ const DEFAULT_BIRD_IMAGE = "/test.png";
 const EMPTY_GARDEN_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexSeenSpecies: [] };
 
 type RegistrationConfirmPayload = {
-  birdName: string;
+  /** 짹짹짹 화면·도감에 쓰는 목록상 종 이름 */
+  speciesName: string;
   photoUrl: string | null;
   totalSightings: number;
 };
@@ -169,6 +170,7 @@ export default function Home() {
   const [isPhotoPopupOpen, setIsPhotoPopupOpen] = useState(false);
   const [canOpenPhotoPopup, setCanOpenPhotoPopup] = useState(true);
   const [birdName, setBirdName] = useState("청둥오리");
+  const [registrationSpeciesName, setRegistrationSpeciesName] = useState<string | null>(null);
   const [birdFeature, setBirdFeature] = useState("");
   const [birdCount, setBirdCount] = useState(1);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
@@ -278,6 +280,30 @@ export default function Home() {
 
     scrollElement.scrollLeft = (scrollElement.scrollWidth - scrollElement.clientWidth) / 2;
   }, []);
+
+  useEffect(() => {
+    if (!selectedGardenBirdId) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target.closest(".bird-speech-bubble") || target.closest(".bird")) {
+        return;
+      }
+      closeGardenBirdDetail();
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [selectedGardenBirdId]);
 
   useEffect(() => {
     if (!isProfileOpen) {
@@ -610,6 +636,7 @@ export default function Home() {
     const mode = opts?.mode ?? "listed";
     const nextName =
       mode === "unlisted" ? "" : opts?.name !== undefined ? opts.name : "청둥오리";
+    setRegistrationSpeciesName(mode === "unlisted" ? null : nextName);
     setIsBirdListOpen(false);
     setSelectedListBirdId(null);
     setBirdRegistrationMode(mode);
@@ -808,8 +835,12 @@ export default function Home() {
     setBirdRecords(nextRecords);
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
+    const speciesNameForConfirm = isUnlisted
+      ? displayName
+      : registrationSpeciesName?.trim() || displayName;
+
     setRegistrationConfirm({
-      birdName: displayName,
+      speciesName: speciesNameForConfirm,
       photoUrl: capturedPhoto,
       totalSightings,
     });
@@ -1279,25 +1310,70 @@ export default function Home() {
 
         <div className="garden-scroll" ref={scrollRef}>
           <div className="garden-world">
-            {gardenBirds.map((bird) => (
-              <button
-                key={bird.id}
-                type="button"
-                className={`bird${bird.inWater !== false ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}`}
-                style={{
-                  left: `${bird.xPercent}%`,
-                  top: `${bird.yPercent}%`,
-                  width: `${bird.size}px`,
-                  height: `${bird.size}px`,
-                }}
-                onClick={() => openGardenBirdDetail(bird.id)}
-                aria-label="정원에 둔 조류 보기"
-              >
-                <span className="bird-sprite">
-                  <Image src="/test.png" alt="" fill sizes="64px" className="bird-sprite-img" />
-                </span>
-              </button>
-            ))}
+            {gardenBirds.map((bird) => {
+              const isBubbleOpen = selectedGardenBird?.id === bird.id;
+              const bubbleSize = Math.round(bird.size * 1.8);
+
+              return (
+                <div
+                  key={bird.id}
+                  className={`bird-anchor${isBubbleOpen ? " bird-anchor--open" : ""}`}
+                  style={{ left: `${bird.xPercent}%`, top: `${bird.yPercent}%` }}
+                >
+                  <button
+                    type="button"
+                    className={`bird${bird.inWater !== false ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}${isBubbleOpen ? " bird--selected" : ""}`}
+                    style={{
+                      width: `${bird.size}px`,
+                      height: `${bird.size}px`,
+                    }}
+                    onClick={() => openGardenBirdDetail(bird.id)}
+                    aria-label="정원에 둔 조류 보기"
+                    aria-expanded={isBubbleOpen}
+                  >
+                    <span className="bird-sprite">
+                      <Image src="/test.png" alt="" fill sizes="64px" className="bird-sprite-img" />
+                    </span>
+                  </button>
+
+                  {isBubbleOpen ? (
+                    <div
+                      className="bird-speech-bubble"
+                      role="dialog"
+                      aria-label="조류 상세"
+                      style={{ width: `${bubbleSize}px`, minHeight: `${Math.round(bubbleSize * 0.85)}px` }}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      {gardenBirdDeleteConfirm ? (
+                        <div className="bird-speech-bubble-inner bird-speech-bubble-inner--confirm">
+                          <p className="bird-speech-confirm-text">삭제하시겠습니까?</p>
+                          <div className="bird-speech-confirm-actions">
+                            <button type="button" className="garden-bird-text-btn" onClick={() => void confirmGardenBirdDelete()}>
+                              네
+                            </button>
+                            <button type="button" className="garden-bird-text-btn" onClick={cancelGardenBirdDelete}>
+                              아니요
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bird-speech-bubble-inner">
+                          {selectedGardenBirdRecord?.photoUrl ? (
+                            <div className="bird-speech-photo">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={selectedGardenBirdRecord.photoUrl} alt={selectedGardenBirdRecord.name} />
+                            </div>
+                          ) : null}
+                          <button type="button" className="garden-bird-delete-link" onClick={requestGardenBirdDelete}>
+                            삭제하기
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -1309,48 +1385,6 @@ export default function Home() {
           <p className="garden-sync-error" role="alert">
             {gardenSyncError}
           </p>
-        ) : null}
-
-        {selectedGardenBird ? (
-          <div
-            className="garden-bird-detail-overlay"
-            role="presentation"
-            onClick={closeGardenBirdDetail}
-          >
-            <div
-              className="garden-bird-detail-card"
-              role="dialog"
-              aria-modal="true"
-              aria-label="조류 상세"
-              onClick={(event) => event.stopPropagation()}
-            >
-              {gardenBirdDeleteConfirm ? (
-                <div className="garden-bird-delete-confirm">
-                  <p className="garden-bird-delete-confirm-text">삭제하시겠습니까?</p>
-                  <div className="garden-bird-delete-confirm-actions">
-                    <button type="button" className="garden-bird-text-btn" onClick={() => void confirmGardenBirdDelete()}>
-                      네
-                    </button>
-                    <button type="button" className="garden-bird-text-btn" onClick={cancelGardenBirdDelete}>
-                      아니요
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {selectedGardenBirdRecord?.photoUrl ? (
-                    <div className="garden-bird-detail-photo">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={selectedGardenBirdRecord.photoUrl} alt={selectedGardenBirdRecord.name} />
-                    </div>
-                  ) : null}
-                  <button type="button" className="garden-bird-delete-link" onClick={requestGardenBirdDelete}>
-                    삭제하기
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
         ) : null}
 
         <div className="profile-corner" ref={profileMenuRef}>
@@ -1870,14 +1904,14 @@ export default function Home() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={registrationConfirm.photoUrl}
-                      alt={registrationConfirm.birdName}
+                      alt={registrationConfirm.speciesName}
                       className="bird-confirm-photo-img"
                     />
                   ) : (
                     <div className="bird-confirm-photo-default">
                       <Image
                         src={DEFAULT_BIRD_IMAGE}
-                        alt={registrationConfirm.birdName}
+                        alt={registrationConfirm.speciesName}
                         fill
                         sizes="240px"
                         className="bird-confirm-photo-default-img"
@@ -1888,7 +1922,7 @@ export default function Home() {
               </div>
 
               <p className="bird-confirm-message">
-                <span className="bird-confirm-message-name">{registrationConfirm.birdName}</span>를 벌써{" "}
+                <span className="bird-confirm-message-name">{registrationConfirm.speciesName}</span>를 벌써{" "}
                 <span className="bird-confirm-message-count">{registrationConfirm.totalSightings}</span>번이나
                 발견하셨네요!
               </p>
