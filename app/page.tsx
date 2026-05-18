@@ -10,7 +10,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   loadUserGarden,
   saveUserGarden,
@@ -108,6 +108,7 @@ const buildDexDisplayEntries = (records: BirdRecord[], dexSeenSpecies: string[])
 
 const GARDEN_STORAGE_KEY = "birdy-garden:birds:v1";
 const DEFAULT_BIRD_IMAGE = "/test.png";
+const EMPTY_GARDEN_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexSeenSpecies: [] };
 
 type RegistrationConfirmPayload = {
   birdName: string;
@@ -205,6 +206,7 @@ export default function Home() {
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const saveGardenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const guestSessionPayloadRef = useRef<UserGardenPayload>(EMPTY_GARDEN_PAYLOAD);
 
   const profileInitial = useMemo(() => {
     const trimmed = profileUsername.trim();
@@ -268,83 +270,23 @@ export default function Home() {
     setDexSeenSpecies(payload.dexSeenSpecies ?? []);
   };
 
-  const readGuestGardenFromLocal = (): UserGardenPayload => {
+  const clearLegacyGuestStorage = () => {
     try {
-      const raw = window.localStorage.getItem(GARDEN_STORAGE_KEY);
-      if (!raw) {
-        return { birds: [], records: [], dexSeenSpecies: [] };
-      }
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        const birds: PlacedBird[] = parsed
-          .filter(
-            (item) =>
-              item &&
-              typeof item.id === "string" &&
-              typeof item.xPercent === "number" &&
-              typeof item.yPercent === "number" &&
-              typeof item.size === "number"
-          )
-          .map((item) => ({
-            id: item.id,
-            xPercent: item.xPercent,
-            yPercent: item.yPercent,
-            size: item.size,
-          }));
-        return { birds, records: [], dexSeenSpecies: [] };
-      }
-      if (!parsed || typeof parsed !== "object") {
-        return { birds: [], records: [], dexSeenSpecies: [] };
-      }
-      const obj = parsed as {
-        birds?: unknown;
-        records?: unknown;
-        dexSeenSpecies?: unknown;
-      };
-      const birds = Array.isArray(obj.birds)
-        ? obj.birds
-            .filter(
-              (item): item is PlacedBird =>
-                !!item &&
-                typeof item === "object" &&
-                typeof (item as PlacedBird).id === "string" &&
-                typeof (item as PlacedBird).xPercent === "number" &&
-                typeof (item as PlacedBird).yPercent === "number" &&
-                typeof (item as PlacedBird).size === "number"
-            )
-            .map((item) => ({
-              id: item.id,
-              xPercent: item.xPercent,
-              yPercent: item.yPercent,
-              size: item.size,
-            }))
-        : [];
-      const records = Array.isArray(obj.records)
-        ? obj.records
-            .filter(
-              (item): item is BirdRecord =>
-                !!item &&
-                typeof item === "object" &&
-                typeof (item as BirdRecord).id === "string" &&
-                typeof (item as BirdRecord).name === "string"
-            )
-            .map((item) => ({
-              id: item.id,
-              name: item.name,
-              feature: typeof item.feature === "string" ? item.feature : "",
-              photoUrl: typeof item.photoUrl === "string" ? item.photoUrl : null,
-              count: typeof item.count === "number" ? item.count : 1,
-              createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
-            }))
-        : [];
-      const dexSeen = Array.isArray(obj.dexSeenSpecies)
-        ? obj.dexSeenSpecies.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
-        : [];
-      return { birds, records, dexSeenSpecies: dexSeen };
+      window.localStorage.removeItem(GARDEN_STORAGE_KEY);
     } catch {
-      return { birds: [], records: [], dexSeenSpecies: [] };
+      // ignore
     }
   };
+
+  const resetGuestGarden = () => {
+    applyGardenPayload(EMPTY_GARDEN_PAYLOAD);
+    guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
+    clearLegacyGuestStorage();
+  };
+
+  useEffect(() => {
+    clearLegacyGuestStorage();
+  }, []);
 
   const buildGardenPayload = (): UserGardenPayload => ({
     birds: gardenBirds,
@@ -357,54 +299,62 @@ export default function Home() {
     [birdRecords, dexSeenSpecies]
   );
 
-  const loadGardenForUser = async (uid: string, options?: { mergeGuestIfEmpty?: boolean }) => {
+  const loadGardenForUser = async (uid: string, options?: { mergeSessionGuestIfEmpty?: boolean }) => {
     setIsGardenSyncing(true);
     try {
       const payload = await loadUserGarden(uid);
-      const guest = options?.mergeGuestIfEmpty
-        ? readGuestGardenFromLocal()
-        : { birds: [], records: [], dexSeenSpecies: [] };
-      if (payload.birds.length === 0 && guest.birds.length > 0) {
+      const sessionGuest = options?.mergeSessionGuestIfEmpty ? guestSessionPayloadRef.current : EMPTY_GARDEN_PAYLOAD;
+      if (payload.birds.length === 0 && sessionGuest.birds.length > 0) {
         const merged: UserGardenPayload = {
-          birds: guest.birds,
-          records: guest.records,
-          dexSeenSpecies: guest.dexSeenSpecies ?? [],
+          birds: sessionGuest.birds,
+          records: sessionGuest.records,
+          dexSeenSpecies: sessionGuest.dexSeenSpecies ?? [],
         };
         applyGardenPayload(merged);
         await saveUserGarden(uid, merged);
+        guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
+        clearLegacyGuestStorage();
         return;
       }
       applyGardenPayload(payload);
     } catch {
-      applyGardenPayload({ birds: [], records: [], dexSeenSpecies: [] });
+      applyGardenPayload(EMPTY_GARDEN_PAYLOAD);
     } finally {
       setIsGardenSyncing(false);
     }
-  };
-
-  const loadGuestGardenFromLocal = () => {
-    applyGardenPayload(readGuestGardenFromLocal());
   };
 
   useEffect(() => {
     let unsubscribed = false;
 
     const syncAuthState = async () => {
+      if (!isSupabaseConfigured()) {
+        if (!unsubscribed) {
+          setIsLoggedIn(false);
+          setUserId(null);
+          resetGuestGarden();
+          setIsGardenHydrated(true);
+        }
+        return () => undefined;
+      }
+
       try {
         const supabase = getSupabaseBrowserClient();
         const { data } = await supabase.auth.getSession();
         const session = data.session;
         if (!unsubscribed) {
+          const initialUserId = session?.user.id ?? null;
           setIsLoggedIn(!!session);
           syncProfileFromSession(session?.user.email);
-          const initialUserId = session?.user.id ?? null;
           setUserId(initialUserId);
           if (initialUserId) {
-            await loadGardenForUser(initialUserId, { mergeGuestIfEmpty: true });
+            await loadGardenForUser(initialUserId, { mergeSessionGuestIfEmpty: true });
           } else {
-            loadGuestGardenFromLocal();
+            resetGuestGarden();
           }
-          setIsGardenHydrated(true);
+          if (!unsubscribed) {
+            setIsGardenHydrated(true);
+          }
         }
         const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
           setIsLoggedIn(!!nextSession);
@@ -412,13 +362,13 @@ export default function Home() {
           if (!nextSession) {
             setIsProfileOpen(false);
             setProfileUsername("");
+            setRegistrationConfirm(null);
+            resetGuestGarden();
           }
           const nextUserId = nextSession?.user.id ?? null;
           setUserId(nextUserId);
           if (nextUserId) {
-            await loadGardenForUser(nextUserId, { mergeGuestIfEmpty: true });
-          } else {
-            loadGuestGardenFromLocal();
+            await loadGardenForUser(nextUserId, { mergeSessionGuestIfEmpty: true });
           }
         });
         return () => {
@@ -430,7 +380,7 @@ export default function Home() {
           setUserId(null);
           setProfileUsername("");
           setIsProfileOpen(false);
-          loadGuestGardenFromLocal();
+          resetGuestGarden();
           setIsGardenHydrated(true);
         }
       }
@@ -465,27 +415,24 @@ export default function Home() {
       return;
     }
 
-    if (userId) {
+    if (!userId) {
+      guestSessionPayloadRef.current = buildGardenPayload();
+      return;
+    }
+
+    if (saveGardenTimerRef.current) {
+      clearTimeout(saveGardenTimerRef.current);
+    }
+    saveGardenTimerRef.current = setTimeout(() => {
+      void saveUserGarden(userId, buildGardenPayload()).catch(() => {
+        // 네트워크/권한 오류 시 UI는 유지
+      });
+    }, 600);
+    return () => {
       if (saveGardenTimerRef.current) {
         clearTimeout(saveGardenTimerRef.current);
       }
-      saveGardenTimerRef.current = setTimeout(() => {
-        void saveUserGarden(userId, buildGardenPayload()).catch(() => {
-          // 네트워크/권한 오류 시 UI는 유지
-        });
-      }, 600);
-      return () => {
-        if (saveGardenTimerRef.current) {
-          clearTimeout(saveGardenTimerRef.current);
-        }
-      };
-    }
-
-    try {
-      window.localStorage.setItem(GARDEN_STORAGE_KEY, JSON.stringify(buildGardenPayload()));
-    } catch {
-      // localStorage 저장 실패 시 무시
-    }
+    };
   }, [gardenBirds, birdRecords, dexSeenSpecies, isGardenHydrated, isGardenSyncing, userId]);
 
   const resetBirdFormDraft = () => {
@@ -748,8 +695,11 @@ export default function Home() {
     if (lower.includes("signup") && lower.includes("disabled")) {
       return "회원가입이 꺼져 있어요. Supabase Authentication 설정을 확인해 주세요.";
     }
-    if (lower.includes("password")) {
-      return "비밀번호는 6자 이상으로 입력해 주세요.";
+    if (lower.includes("password") || lower.includes("weak")) {
+      return "비밀번호는 8자 이상으로 입력해 주세요.";
+    }
+    if (lower.includes("rate limit") || lower.includes("too many")) {
+      return "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.";
     }
     if (lower.includes("supabase 환경 변수")) {
       return "서버에 Supabase 설정이 없어요. Vercel 환경 변수를 확인해 주세요.";
@@ -767,13 +717,17 @@ export default function Home() {
     const { data: sessionData } = await supabase.auth.getSession();
     if (sessionData.session?.user.id) {
       setUserId(sessionData.session.user.id);
-      await loadGardenForUser(sessionData.session.user.id, { mergeGuestIfEmpty: true });
+      await loadGardenForUser(sessionData.session.user.id, { mergeSessionGuestIfEmpty: true });
     }
   };
 
   const submitLogin = async () => {
     if (!loginId.trim() || !loginPassword.trim()) {
       setLoginMessage("아이디와 비밀번호를 입력해 주세요.");
+      return;
+    }
+    if (!isSupabaseConfigured()) {
+      setLoginMessage("Supabase 설정이 없어 로그인할 수 없어요. Vercel 환경 변수를 확인해 주세요.");
       return;
     }
     try {
@@ -827,12 +781,16 @@ export default function Home() {
       setLoginMessage("아이디는 2자 이상으로 입력해 주세요.");
       return;
     }
-    if (loginPassword.length < 6) {
-      setLoginMessage("비밀번호는 6자 이상으로 입력해 주세요.");
+    if (loginPassword.length < 8) {
+      setLoginMessage("비밀번호는 8자 이상으로 입력해 주세요.");
       return;
     }
     if (loginPassword !== signupPasswordConfirm) {
       setLoginMessage("비밀번호 확인이 일치하지 않아요.");
+      return;
+    }
+    if (!isSupabaseConfigured()) {
+      setLoginMessage("Supabase 설정이 없어 회원가입할 수 없어요. Vercel 환경 변수를 확인해 주세요.");
       return;
     }
     try {
@@ -847,6 +805,7 @@ export default function Home() {
           data: {
             username: trimmedId,
           },
+          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
         },
       });
       if (error) {
@@ -1549,7 +1508,7 @@ export default function Home() {
                 id="login-password-input"
                 type="password"
                 className="bird-login-input"
-                placeholder={authMode === "signup" ? "6자 이상 비밀번호" : "비밀번호를 입력하세요"}
+                placeholder={authMode === "signup" ? "8자 이상 비밀번호" : "비밀번호를 입력하세요"}
                 value={loginPassword}
                 onChange={(event) => setLoginPassword(event.target.value)}
                 autoComplete={authMode === "signup" ? "new-password" : "current-password"}
