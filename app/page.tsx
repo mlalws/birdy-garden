@@ -25,6 +25,7 @@ import {
   type UserProfile,
 } from "@/lib/profile";
 import { readProfileImageAsDataUrl } from "@/lib/profile-image";
+import { createGardenBirds } from "@/lib/garden-birds";
 import {
   loadUserGarden,
   saveUserGarden,
@@ -143,19 +144,6 @@ const countSpeciesSightings = (records: BirdRecord[], speciesName: string) => {
   }, 0);
 };
 
-const BASE_BIRD_SLOTS: PlacedBird[] = [
-  // 물/잔디 구역(하단부) 전용 배치
-  { id: "w1", xPercent: 19, yPercent: 72, size: 24 },
-  { id: "w2", xPercent: 30, yPercent: 78, size: 22 },
-  { id: "w3", xPercent: 41, yPercent: 74, size: 26 },
-  { id: "w4", xPercent: 55, yPercent: 80, size: 24 },
-  { id: "w5", xPercent: 67, yPercent: 73, size: 23 },
-  { id: "w6", xPercent: 78, yPercent: 82, size: 21 },
-  { id: "w7", xPercent: 88, yPercent: 76, size: 22 },
-];
-
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-
 /** Supabase가 거부하지 않는 가짜 이메일 도메인 (하이픈 없는 FQDN) */
 const AUTH_EMAIL_DOMAIN = "users.birdygarden.app";
 const LEGACY_AUTH_EMAIL_DOMAINS = ["users.birdy-garden.app", "birdy.local"] as const;
@@ -169,23 +157,6 @@ const displayIdFromAuthEmail = (email: string | undefined | null) => {
     return email;
   }
   return email.slice(0, at);
-};
-
-const createGardenBirds = (count: number, offset: number): PlacedBird[] => {
-  return Array.from({ length: count }, (_, idx) => {
-    const seq = offset + idx;
-    const base = BASE_BIRD_SLOTS[seq % BASE_BIRD_SLOTS.length];
-    const ring = Math.floor(seq / BASE_BIRD_SLOTS.length);
-    const jitter = (ring % 2 === 0 ? 1 : -1) * Math.min(5, ring + 1);
-
-    return {
-      id: `garden-${Date.now()}-${seq}`,
-      xPercent: clamp(base.xPercent + jitter, 8, 92),
-      yPercent: clamp(base.yPercent + (ring % 3) - 1, 66, 90),
-      // 기존 대비 약 2배 크기
-      size: clamp(base.size * 2 - (ring % 2), 36, 58),
-    };
-  });
 };
 
 export default function Home() {
@@ -223,6 +194,8 @@ export default function Home() {
   const [profileEditMessage, setProfileEditMessage] = useState("");
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [registrationConfirm, setRegistrationConfirm] = useState<RegistrationConfirmPayload | null>(null);
+  const [selectedGardenBirdId, setSelectedGardenBirdId] = useState<string | null>(null);
+  const [gardenBirdDeleteConfirm, setGardenBirdDeleteConfirm] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -233,6 +206,18 @@ export default function Home() {
   const guestSessionPayloadRef = useRef<UserGardenPayload>(EMPTY_GARDEN_PAYLOAD);
 
   const profileAvatarUrl = userProfile?.avatarUrl ?? null;
+
+  const selectedGardenBird = useMemo(
+    () => gardenBirds.find((bird) => bird.id === selectedGardenBirdId) ?? null,
+    [gardenBirds, selectedGardenBirdId]
+  );
+
+  const selectedGardenBirdRecord = useMemo(() => {
+    if (!selectedGardenBird?.recordId) {
+      return null;
+    }
+    return birdRecords.find((record) => record.id === selectedGardenBird.recordId) ?? null;
+  }, [birdRecords, selectedGardenBird]);
 
   const profileInitial = useMemo(() => {
     const trimmed = profileUsername.trim();
@@ -651,14 +636,74 @@ export default function Home() {
     resetBirdFormDraft();
   };
 
+  const closeGardenBirdDetail = () => {
+    setSelectedGardenBirdId(null);
+    setGardenBirdDeleteConfirm(false);
+  };
+
+  const openGardenBirdDetail = (birdId: string) => {
+    setSelectedGardenBirdId(birdId);
+    setGardenBirdDeleteConfirm(false);
+  };
+
+  const requestGardenBirdDelete = () => {
+    setGardenBirdDeleteConfirm(true);
+  };
+
+  const cancelGardenBirdDelete = () => {
+    setGardenBirdDeleteConfirm(false);
+  };
+
+  const confirmGardenBirdDelete = async () => {
+    if (!selectedGardenBird) {
+      return;
+    }
+    const birdId = selectedGardenBird.id;
+    const recordId = selectedGardenBird.recordId;
+    const nextBirds = gardenBirds.filter((bird) => bird.id !== birdId);
+    let nextRecords = birdRecords;
+
+    if (recordId) {
+      const target = birdRecords.find((record) => record.id === recordId);
+      if (target) {
+        const remainingForRecord = nextBirds.filter((bird) => bird.recordId === recordId).length;
+        if (remainingForRecord === 0) {
+          nextRecords = birdRecords.filter((record) => record.id !== recordId);
+        } else if (target.count > remainingForRecord) {
+          nextRecords = birdRecords.map((record) =>
+            record.id === recordId ? { ...record, count: remainingForRecord } : record
+          );
+        }
+      }
+    }
+
+    setGardenBirds(nextBirds);
+    setBirdRecords(nextRecords);
+    closeGardenBirdDetail();
+
+    if (userId) {
+      try {
+        await persistGarden(userId, {
+          birds: nextBirds,
+          records: nextRecords,
+          dexSeenSpecies,
+          ...(userProfile ? { profile: userProfile } : {}),
+        });
+      } catch {
+        // UI는 이미 반영
+      }
+    }
+  };
+
   const submitBirdRegistration = async () => {
     const isUnlisted = birdRegistrationMode === "unlisted";
     const amount = isUnlisted ? 1 : Math.max(1, birdCount);
     const displayName = birdName.trim() || (isUnlisted ? "이름 없는 조류" : "청둥오리");
     const capturedPhoto = photoPreviewUrl;
-    const newBirds = createGardenBirds(amount, gardenBirds.length);
+    const recordId = `record-${Date.now()}`;
+    const newBirds = createGardenBirds(amount, gardenBirds.length, recordId);
     const newRecord: BirdRecord = {
-      id: `record-${Date.now()}`,
+      id: recordId,
       name: displayName,
       feature: birdFeature.trim(),
       photoUrl: capturedPhoto,
@@ -685,6 +730,7 @@ export default function Home() {
           birds: nextBirds,
           records: nextRecords,
           dexSeenSpecies,
+          ...(userProfile ? { profile: userProfile } : {}),
         });
       } catch {
         // 저장 실패해도 화면 상태는 유지
@@ -1146,18 +1192,23 @@ export default function Home() {
         <div className="garden-scroll" ref={scrollRef}>
           <div className="garden-world">
             {gardenBirds.map((bird) => (
-              <span
+              <button
                 key={bird.id}
-                className="bird"
+                type="button"
+                className={`bird${bird.inWater !== false ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}`}
                 style={{
                   left: `${bird.xPercent}%`,
                   top: `${bird.yPercent}%`,
                   width: `${bird.size}px`,
                   height: `${bird.size}px`,
                 }}
+                onClick={() => openGardenBirdDetail(bird.id)}
+                aria-label="정원에 둔 조류 보기"
               >
-                <Image src="/test.png" alt="청둥오리" fill sizes="32px" />
-              </span>
+                <span className="bird-sprite">
+                  <Image src="/test.png" alt="" fill sizes="64px" className="bird-sprite-img" />
+                </span>
+              </button>
             ))}
           </div>
         </div>
@@ -1165,6 +1216,48 @@ export default function Home() {
         <button type="button" className="add-bird-button" onClick={openBirdList}>
           + 오늘의 새 추가하기
         </button>
+
+        {selectedGardenBird ? (
+          <div
+            className="garden-bird-detail-overlay"
+            role="presentation"
+            onClick={closeGardenBirdDetail}
+          >
+            <div
+              className="garden-bird-detail-card"
+              role="dialog"
+              aria-modal="true"
+              aria-label="조류 상세"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {gardenBirdDeleteConfirm ? (
+                <div className="garden-bird-delete-confirm">
+                  <p className="garden-bird-delete-confirm-text">삭제하시겠습니까?</p>
+                  <div className="garden-bird-delete-confirm-actions">
+                    <button type="button" className="garden-bird-text-btn" onClick={() => void confirmGardenBirdDelete()}>
+                      네
+                    </button>
+                    <button type="button" className="garden-bird-text-btn" onClick={cancelGardenBirdDelete}>
+                      아니요
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {selectedGardenBirdRecord?.photoUrl ? (
+                    <div className="garden-bird-detail-photo">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={selectedGardenBirdRecord.photoUrl} alt={selectedGardenBirdRecord.name} />
+                    </div>
+                  ) : null}
+                  <button type="button" className="garden-bird-delete-link" onClick={requestGardenBirdDelete}>
+                    삭제하기
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ) : null}
 
         <div className="profile-corner" ref={profileMenuRef}>
           {!isLoggedIn ? (

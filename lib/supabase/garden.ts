@@ -3,11 +3,18 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export type { UserProfile } from "@/lib/profile";
 
+export type BirdFacing = "left" | "right";
+
 export type PlacedBird = {
   id: string;
   xPercent: number;
   yPercent: number;
   size: number;
+  /** 등록 기록과 연결 (탭 시 사진·삭제) */
+  recordId?: string;
+  facing?: BirdFacing;
+  /** 호수 안이면 다리 영역 클리핑 */
+  inWater?: boolean;
 };
 
 export type BirdRecord = {
@@ -44,12 +51,19 @@ function normalizePayload(raw: unknown): UserGardenPayload {
             typeof (item as PlacedBird).yPercent === "number" &&
             typeof (item as PlacedBird).size === "number"
         )
-        .map((item) => ({
-          id: item.id,
-          xPercent: item.xPercent,
-          yPercent: item.yPercent,
-          size: item.size,
-        }))
+        .map((item) => {
+          const raw = item as PlacedBird;
+          const facing: BirdFacing = raw.facing === "left" ? "left" : "right";
+          return {
+            id: raw.id,
+            xPercent: raw.xPercent,
+            yPercent: raw.yPercent,
+            size: raw.size,
+            recordId: typeof raw.recordId === "string" ? raw.recordId : undefined,
+            facing,
+            inWater: raw.inWater !== false,
+          };
+        })
     : [];
 
   const records = Array.isArray(obj.records)
