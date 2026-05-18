@@ -3,6 +3,8 @@ export type UserProfile = {
   /** 프로필에서 닉네임을 저장한 횟수 (첫 저장은 한 달 제한 없음) */
   nicknameEditCount: number;
   nicknameLastChangedAt: string | null;
+  /** data:image/... 프로필 사진 */
+  avatarUrl?: string | null;
 };
 
 const NICKNAME_WORDS = [
@@ -47,6 +49,11 @@ export function normalizeUserProfile(raw: unknown): UserProfile | null {
   if (!nickname) {
     return null;
   }
+  const avatarUrl =
+    typeof obj.avatarUrl === "string" && obj.avatarUrl.startsWith("data:image/")
+      ? obj.avatarUrl
+      : null;
+
   return {
     nickname: nickname.slice(0, NICKNAME_MAX),
     nicknameEditCount:
@@ -55,6 +62,7 @@ export function normalizeUserProfile(raw: unknown): UserProfile | null {
         : 0,
     nicknameLastChangedAt:
       typeof obj.nicknameLastChangedAt === "string" ? obj.nicknameLastChangedAt : null,
+    avatarUrl,
   };
 }
 
@@ -101,8 +109,16 @@ export function canChangeNickname(profile: UserProfile, now = Date.now()): { ok:
 
 export function applyNicknameChange(profile: UserProfile, nextNickname: string): UserProfile {
   return {
+    ...profile,
     nickname: nextNickname.trim().slice(0, NICKNAME_MAX),
     nicknameEditCount: profile.nicknameEditCount + 1,
     nicknameLastChangedAt: new Date().toISOString(),
+  };
+}
+
+export function applyAvatarChange(profile: UserProfile, avatarUrl: string | null): UserProfile {
+  return {
+    ...profile,
+    avatarUrl,
   };
 }

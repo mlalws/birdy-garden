@@ -17,12 +17,14 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import {
+  applyAvatarChange,
   applyNicknameChange,
   canChangeNickname,
   generateRandomNickname,
   validateNicknameInput,
   type UserProfile,
 } from "@/lib/profile";
+import { readProfileImageAsDataUrl } from "@/lib/profile-image";
 import {
   loadUserGarden,
   saveUserGarden,
@@ -227,7 +229,10 @@ export default function Home() {
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const saveGardenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
+  const profileAvatarInputRef = useRef<HTMLInputElement>(null);
   const guestSessionPayloadRef = useRef<UserGardenPayload>(EMPTY_GARDEN_PAYLOAD);
+
+  const profileAvatarUrl = userProfile?.avatarUrl ?? null;
 
   const profileInitial = useMemo(() => {
     const trimmed = profileUsername.trim();
@@ -236,6 +241,17 @@ export default function Home() {
     }
     return trimmed.slice(0, 1).toUpperCase();
   }, [profileUsername]);
+
+  const renderProfileAvatar = (sizeClass: "profile-avatar--small" | "profile-avatar--large") => (
+    <span className={`profile-avatar ${sizeClass}`} aria-hidden>
+      {profileAvatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={profileAvatarUrl} alt="" className="profile-avatar-img" />
+      ) : (
+        <span className="profile-avatar-initial">{profileInitial}</span>
+      )}
+    </span>
+  );
 
   const applyProfileDisplay = (profile: UserProfile | null, email?: string | null) => {
     if (profile?.nickname) {
@@ -370,6 +386,7 @@ export default function Home() {
       nickname: generateRandomNickname(),
       nicknameEditCount: 0,
       nicknameLastChangedAt: null,
+      avatarUrl: null,
     };
     const merged: UserGardenPayload = { ...payload, profile };
     await saveUserGarden(uid, merged);
@@ -709,7 +726,23 @@ export default function Home() {
       nickname: profileUsername || "사용자",
       nicknameEditCount: 0,
       nicknameLastChangedAt: null,
+      avatarUrl: null,
     };
+  };
+
+  const persistUserProfile = async (profile: UserProfile, message: string) => {
+    if (!userId) {
+      return;
+    }
+    const payload: UserGardenPayload = {
+      birds: gardenBirds,
+      records: birdRecords,
+      dexSeenSpecies,
+      profile,
+    };
+    await saveUserGarden(userId, payload);
+    setUserProfile(profile);
+    setProfileEditMessage(message);
   };
 
   const openNicknameEditor = () => {
@@ -754,19 +787,47 @@ export default function Home() {
     try {
       setIsProfileSaving(true);
       const updated = applyNicknameChange(baseProfile, trimmed);
-      const payload: UserGardenPayload = {
-        birds: gardenBirds,
-        records: birdRecords,
-        dexSeenSpecies,
-        profile: updated,
-      };
-      await saveUserGarden(userId, payload);
-      setUserProfile(updated);
+      await persistUserProfile(updated, "닉네임을 저장했어요.");
       setProfileUsername(updated.nickname);
       setIsNicknameEditing(false);
-      setProfileEditMessage("닉네임을 저장했어요.");
     } catch {
       setProfileEditMessage("저장에 실패했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsProfileSaving(false);
+    }
+  };
+
+  const handleProfileAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !userId) {
+      return;
+    }
+    try {
+      setIsProfileSaving(true);
+      setProfileEditMessage("");
+      const avatarUrl = await readProfileImageAsDataUrl(file);
+      const updated = applyAvatarChange(resolveEditableProfile(), avatarUrl);
+      await persistUserProfile(updated, "프로필 사진을 저장했어요.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "사진 저장에 실패했어요.";
+      setProfileEditMessage(message);
+    } finally {
+      setIsProfileSaving(false);
+    }
+  };
+
+  const removeProfileAvatar = async () => {
+    if (!userId || !profileAvatarUrl) {
+      return;
+    }
+    try {
+      setIsProfileSaving(true);
+      setProfileEditMessage("");
+      const updated = applyAvatarChange(resolveEditableProfile(), null);
+      await persistUserProfile(updated, "프로필 사진을 제거했어요.");
+    } catch {
+      setProfileEditMessage("사진 제거에 실패했어요. 잠시 후 다시 시도해 주세요.");
     } finally {
       setIsProfileSaving(false);
     }
@@ -1120,15 +1181,40 @@ export default function Home() {
                 aria-expanded={isProfileOpen}
                 aria-haspopup="true"
               >
-                <span className="profile-avatar profile-avatar--small" aria-hidden>
-                  <span className="profile-avatar-initial">{profileInitial}</span>
-                </span>
+                {renderProfileAvatar("profile-avatar--small")}
               </button>
               {isProfileOpen ? (
                 <div className="profile-menu" role="dialog" aria-label="프로필">
-                  <span className="profile-avatar profile-avatar--large" aria-hidden>
-                    <span className="profile-avatar-initial">{profileInitial}</span>
-                  </span>
+                  <input
+                    ref={profileAvatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="profile-avatar-file-input"
+                    onChange={(event) => void handleProfileAvatarChange(event)}
+                    disabled={isProfileSaving}
+                  />
+                  <button
+                    type="button"
+                    className="profile-avatar-picker"
+                    onClick={() => profileAvatarInputRef.current?.click()}
+                    disabled={isProfileSaving}
+                    aria-label="프로필 사진 변경"
+                  >
+                    {renderProfileAvatar("profile-avatar--large")}
+                    <span className="profile-avatar-picker-label">
+                      {isProfileSaving ? "저장 중..." : "사진 변경"}
+                    </span>
+                  </button>
+                  {profileAvatarUrl ? (
+                    <button
+                      type="button"
+                      className="profile-menu-avatar-remove"
+                      onClick={() => void removeProfileAvatar()}
+                      disabled={isProfileSaving}
+                    >
+                      사진 제거
+                    </button>
+                  ) : null}
                   <p className="profile-menu-id">{profileUsername || "사용자"}</p>
                   {!isNicknameEditing ? (
                     <button type="button" className="profile-menu-edit" onClick={openNicknameEditor}>

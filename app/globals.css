@@ -794,6 +794,7 @@ body {
 }
 
 .profile-avatar {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -801,6 +802,57 @@ body {
   background: linear-gradient(145deg, #c9e6f5 0%, #8ec6e4 55%, #6ba8cc 100%);
   border: 2px solid rgba(255, 252, 245, 0.95);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  overflow: hidden;
+}
+
+.profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-avatar-file-input {
+  display: none;
+}
+
+.profile-avatar-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.profile-avatar-picker:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.profile-avatar-picker-label {
+  color: #7a5538;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.profile-menu-avatar-remove {
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: #9a6a45;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.profile-menu-avatar-remove:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .profile-avatar--small {
