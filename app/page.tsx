@@ -147,6 +147,10 @@ const BASE_BIRD_SLOTS: PlacedBird[] = [
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+/** Supabase가 거부하지 않는 가짜 이메일 도메인 (하이픈 없는 FQDN) */
+const AUTH_EMAIL_DOMAIN = "users.birdygarden.app";
+const LEGACY_AUTH_EMAIL_DOMAINS = ["users.birdy-garden.app", "birdy.local"] as const;
+
 const displayIdFromAuthEmail = (email: string | undefined | null) => {
   if (!email) {
     return "";
@@ -655,7 +659,6 @@ export default function Home() {
 
   const sanitizeAuthId = (id: string) => id.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
 
-  /** Supabase는 @birdy.local 같은 주소를 거부하므로 실제 도메인 형식을 씁니다. */
   const normalizeAuthEmail = (idOrEmail: string) => {
     const trimmed = idOrEmail.trim();
     if (trimmed.includes("@")) {
@@ -665,7 +668,7 @@ export default function Home() {
     if (!local) {
       throw new Error("INVALID_AUTH_ID");
     }
-    return `${local}@users.birdy-garden.app`;
+    return `${local}@${AUTH_EMAIL_DOMAIN}`;
   };
 
   const authEmailsForLogin = (idOrEmail: string) => {
@@ -677,7 +680,8 @@ export default function Home() {
     if (!local) {
       return [];
     }
-    return [`${local}@users.birdy-garden.app`, `${local}@birdy.local`];
+    const domains = [AUTH_EMAIL_DOMAIN, ...LEGACY_AUTH_EMAIL_DOMAINS];
+    return domains.map((domain) => `${local}@${domain}`);
   };
 
   const mapAuthErrorMessage = (message: string) => {
@@ -692,7 +696,7 @@ export default function Home() {
       return "아이디 또는 비밀번호가 맞지 않아요.";
     }
     if (lower.includes("email_address_invalid") || lower.includes("invalid email")) {
-      return "아이디 형식이 올바르지 않아요. 영문·숫자만 사용해 보세요.";
+      return "아이디는 영문·숫자·_(밑줄)만 사용해 주세요. 실제 이메일은 필요 없어요.";
     }
     if (lower.includes("email not confirmed") || lower.includes("email_address_not_authorized")) {
       return "이메일 확인이 켜져 있어요. Supabase 대시보드에서 Confirm email을 끄거나, 가입 메일을 확인해 주세요.";
