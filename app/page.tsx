@@ -10,7 +10,12 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import {
+  assertSupabaseReachable,
+  getSupabaseBrowserClient,
+  getSupabaseConfigIssue,
+  isSupabaseConfigured,
+} from "@/lib/supabase/client";
 import {
   loadUserGarden,
   saveUserGarden,
@@ -701,8 +706,17 @@ export default function Home() {
     if (lower.includes("rate limit") || lower.includes("too many")) {
       return "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.";
     }
-    if (lower.includes("supabase 환경 변수")) {
-      return "서버에 Supabase 설정이 없어요. Vercel 환경 변수를 확인해 주세요.";
+    if (lower.includes("supabase 환경 변수") || lower.includes("supabase 설정") || lower.includes("supabase url")) {
+      return "서버에 Supabase 설정이 없어요. Vercel 환경 변수를 확인한 뒤 Redeploy 해 주세요.";
+    }
+    if (
+      lower.includes("load failed") ||
+      lower.includes("failed to fetch") ||
+      lower.includes("networkerror") ||
+      lower.includes("network request failed") ||
+      lower.includes("연결 시간")
+    ) {
+      return "Supabase 서버에 연결할 수 없어요. Vercel 환경 변수(URL·anon key)와 Supabase 프로젝트가 켜져 있는지 확인한 뒤, 배포를 다시 해 주세요.";
     }
     return message;
   };
@@ -726,13 +740,15 @@ export default function Home() {
       setLoginMessage("아이디와 비밀번호를 입력해 주세요.");
       return;
     }
-    if (!isSupabaseConfigured()) {
-      setLoginMessage("Supabase 설정이 없어 로그인할 수 없어요. Vercel 환경 변수를 확인해 주세요.");
+    const configIssue = getSupabaseConfigIssue();
+    if (configIssue) {
+      setLoginMessage(configIssue);
       return;
     }
     try {
       setIsLoginSubmitting(true);
       setLoginMessage("");
+      await assertSupabaseReachable();
       const supabase = getSupabaseBrowserClient();
       const emails = authEmailsForLogin(loginId);
       if (emails.length === 0) {
@@ -789,12 +805,15 @@ export default function Home() {
       setLoginMessage("비밀번호 확인이 일치하지 않아요.");
       return;
     }
-    if (!isSupabaseConfigured()) {
-      setLoginMessage("Supabase 설정이 없어 회원가입할 수 없어요. Vercel 환경 변수를 확인해 주세요.");
+    const configIssue = getSupabaseConfigIssue();
+    if (configIssue) {
+      setLoginMessage(configIssue);
       return;
     }
     try {
       setIsLoginSubmitting(true);
+      setLoginMessage("가입 서버에 연결 중...");
+      await assertSupabaseReachable();
       setLoginMessage("");
       const supabase = getSupabaseBrowserClient();
       const signUpEmail = normalizeAuthEmail(trimmedId);
