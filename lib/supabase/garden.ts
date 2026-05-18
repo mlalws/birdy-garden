@@ -19,9 +19,10 @@ export type BirdRecord = {
 export type UserGardenPayload = {
   birds: PlacedBird[];
   records: BirdRecord[];
+  dexSeenSpecies?: string[];
 };
 
-const EMPTY_PAYLOAD: UserGardenPayload = { birds: [], records: [] };
+const EMPTY_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexSeenSpecies: [] };
 
 function normalizePayload(raw: unknown): UserGardenPayload {
   if (!raw || typeof raw !== "object") {
@@ -66,7 +67,13 @@ function normalizePayload(raw: unknown): UserGardenPayload {
         }))
     : [];
 
-  return { birds, records };
+  const dexSeenSpecies = Array.isArray((obj as { dexSeenSpecies?: unknown }).dexSeenSpecies)
+    ? (obj as { dexSeenSpecies: unknown[] }).dexSeenSpecies.filter(
+        (name): name is string => typeof name === "string" && name.trim().length > 0
+      )
+    : [];
+
+  return { birds, records, dexSeenSpecies };
 }
 
 export async function loadUserGarden(userId: string): Promise<UserGardenPayload> {

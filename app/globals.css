@@ -605,6 +605,16 @@ body {
   object-fit: cover;
 }
 
+.bird-dex-card-img--uploaded {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px;
+  box-sizing: border-box;
+}
+
 .bird-dex-silhouette {
   position: absolute;
   inset: 0;
@@ -1218,6 +1228,158 @@ body {
   font-size: 20px;
   font-weight: 900;
   color: #3f2615;
+}
+
+/* 등록 확정 화면 */
+.bird-confirm-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #e8e4de;
+}
+
+.bird-confirm-header {
+  flex: 0 0 auto;
+  position: relative;
+  padding: 10px 14px 8px;
+  min-height: 52px;
+}
+
+.bird-confirm-back {
+  position: absolute;
+  left: 6px;
+  top: 4px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 52px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bird-confirm-back-img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.bird-confirm-title {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: #2f2215;
+}
+
+.bird-confirm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 20px 24px;
+  gap: 18px;
+}
+
+.bird-confirm-photo-wrap {
+  position: relative;
+  width: min(100%, 280px);
+  margin-top: 4px;
+}
+
+.bird-confirm-confetti {
+  position: absolute;
+  z-index: 3;
+  font-size: 28px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.12));
+}
+
+.bird-confirm-confetti--tl {
+  top: -8px;
+  left: -4px;
+}
+
+.bird-confirm-confetti--br {
+  bottom: -8px;
+  right: -4px;
+}
+
+.bird-confirm-photo-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  background: #fffaf3;
+  border: 1px solid rgba(160, 150, 140, 0.45);
+  box-shadow: 0 6px 18px rgba(60, 50, 40, 0.1);
+  overflow: hidden;
+}
+
+.bird-confirm-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.bird-confirm-photo-default {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
+}
+
+.bird-confirm-photo-default-img {
+  object-fit: contain;
+  padding: 16px;
+}
+
+.bird-confirm-message {
+  margin: 0;
+  width: min(100%, 320px);
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #5a5a5a 0%, #3d3d3d 100%);
+  color: #fff9f4;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(40, 40, 40, 0.18);
+}
+
+.bird-confirm-message-name,
+.bird-confirm-message-count {
+  font-weight: 900;
+}
+
+.bird-confirm-home-btn {
+  width: min(100%, 320px);
+  margin-top: auto;
+  padding: 16px 20px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #5a5a5a 0%, #3d3d3d 100%);
+  color: #fff9f4;
+  font-size: 17px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(40, 40, 40, 0.2);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bird-confirm-home-btn:active {
+  opacity: 0.92;
 }
 
 /* 신규 조류 등록 (리스트에 없는 조류) */

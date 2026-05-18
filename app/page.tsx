@@ -39,16 +39,94 @@ const BIRD_LIST_ITEMS: ListBird[] = [
   { id: "ph4", name: "", isPlaceholder: true },
 ];
 
-/** 조류 도감 슬롯 (청둥오리만 해금, 나머지 잠금) */
-const DEX_ENTRIES: { id: string; name?: string; unlocked: boolean; isNew?: boolean }[] = [
-  { id: "mallard", name: "청둥오리", unlocked: true, isNew: true },
-  ...Array.from({ length: 14 }, (_, i) => ({
-    id: `locked-${i + 1}`,
-    unlocked: false,
-  })),
+const DEX_SLOT_COUNT = 15;
+
+/** 도감에 미리 정의된 조류 (추가해야 해금) */
+const KNOWN_DEX_SPECIES: { id: string; name: string; imageSrc: string }[] = [
+  { id: "mallard", name: "청둥오리", imageSrc: "/test.png" },
+  { id: "magpie", name: "까치", imageSrc: "/test.png" },
 ];
 
+type DexDisplayEntry = {
+  id: string;
+  name?: string;
+  imageSrc: string;
+  unlocked: boolean;
+  isNew: boolean;
+  photoUrl: string | null;
+};
+
+const getUnlockedSpeciesNames = (records: BirdRecord[]) =>
+  new Set(records.map((record) => record.name.trim()).filter(Boolean));
+
+const getSpeciesPhotoFromRecords = (records: BirdRecord[], speciesName: string) => {
+  const match = [...records].reverse().find((record) => record.name.trim() === speciesName && record.photoUrl);
+  return match?.photoUrl ?? null;
+};
+
+const buildDexDisplayEntries = (records: BirdRecord[], dexSeenSpecies: string[]): DexDisplayEntry[] => {
+  const seen = new Set(dexSeenSpecies);
+  const unlockedNames = getUnlockedSpeciesNames(records);
+  const knownNames = new Set(KNOWN_DEX_SPECIES.map((species) => species.name));
+
+  const entries: DexDisplayEntry[] = KNOWN_DEX_SPECIES.map((species) => {
+    const unlocked = unlockedNames.has(species.name);
+    return {
+      id: species.id,
+      name: species.name,
+      imageSrc: species.imageSrc,
+      unlocked,
+      isNew: unlocked && !seen.has(species.name),
+      photoUrl: unlocked ? getSpeciesPhotoFromRecords(records, species.name) : null,
+    };
+  });
+
+  const customNames = [...unlockedNames].filter((name) => !knownNames.has(name));
+  for (const customName of customNames) {
+    entries.push({
+      id: `custom-${customName}`,
+      name: customName,
+      imageSrc: DEFAULT_BIRD_IMAGE,
+      unlocked: true,
+      isNew: !seen.has(customName),
+      photoUrl: getSpeciesPhotoFromRecords(records, customName),
+    });
+  }
+
+  while (entries.length < DEX_SLOT_COUNT) {
+    entries.push({
+      id: `locked-${entries.length}`,
+      imageSrc: DEFAULT_BIRD_IMAGE,
+      unlocked: false,
+      isNew: false,
+      photoUrl: null,
+    });
+  }
+
+  return entries.slice(0, DEX_SLOT_COUNT);
+};
+
 const GARDEN_STORAGE_KEY = "birdy-garden:birds:v1";
+const DEFAULT_BIRD_IMAGE = "/test.png";
+
+type RegistrationConfirmPayload = {
+  birdName: string;
+  photoUrl: string | null;
+  totalSightings: number;
+};
+
+const countSpeciesSightings = (records: BirdRecord[], speciesName: string) => {
+  const key = speciesName.trim();
+  if (!key) {
+    return 0;
+  }
+  return records.reduce((sum, record) => {
+    if (record.name.trim() === key) {
+      return sum + Math.max(1, record.count);
+    }
+    return sum;
+  }, 0);
+};
 
 const BASE_BIRD_SLOTS: PlacedBird[] = [
   // 물/잔디 구역(하단부) 전용 배치
@@ -104,6 +182,7 @@ export default function Home() {
   const [birdCount, setBirdCount] = useState(1);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
+  const [dexSeenSpecies, setDexSeenSpecies] = useState<string[]>([]);
   const [gardenBirds, setGardenBirds] = useState<PlacedBird[]>([]);
   const [birdRecords, setBirdRecords] = useState<BirdRecord[]>([]);
   const [isGardenHydrated, setIsGardenHydrated] = useState(false);
@@ -119,6 +198,7 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [profileUsername, setProfileUsername] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [registrationConfirm, setRegistrationConfirm] = useState<RegistrationConfirmPayload | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -182,64 +262,128 @@ export default function Home() {
     };
   }, [isProfileOpen]);
 
-  const applyGardenPayload = (birds: PlacedBird[], records: BirdRecord[]) => {
-    setGardenBirds(birds);
-    setBirdRecords(records);
+  const applyGardenPayload = (payload: UserGardenPayload) => {
+    setGardenBirds(payload.birds);
+    setBirdRecords(payload.records);
+    setDexSeenSpecies(payload.dexSeenSpecies ?? []);
   };
 
   const readGuestGardenFromLocal = (): UserGardenPayload => {
     try {
       const raw = window.localStorage.getItem(GARDEN_STORAGE_KEY);
       if (!raw) {
-        return { birds: [], records: [] };
+        return { birds: [], records: [], dexSeenSpecies: [] };
       }
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) {
-        return { birds: [], records: [] };
+      if (Array.isArray(parsed)) {
+        const birds: PlacedBird[] = parsed
+          .filter(
+            (item) =>
+              item &&
+              typeof item.id === "string" &&
+              typeof item.xPercent === "number" &&
+              typeof item.yPercent === "number" &&
+              typeof item.size === "number"
+          )
+          .map((item) => ({
+            id: item.id,
+            xPercent: item.xPercent,
+            yPercent: item.yPercent,
+            size: item.size,
+          }));
+        return { birds, records: [], dexSeenSpecies: [] };
       }
-      const birds: PlacedBird[] = parsed
-        .filter(
-          (item) =>
-            item &&
-            typeof item.id === "string" &&
-            typeof item.xPercent === "number" &&
-            typeof item.yPercent === "number" &&
-            typeof item.size === "number"
-        )
-        .map((item) => ({
-          id: item.id,
-          xPercent: item.xPercent,
-          yPercent: item.yPercent,
-          size: item.size,
-        }));
-      return { birds, records: [] };
+      if (!parsed || typeof parsed !== "object") {
+        return { birds: [], records: [], dexSeenSpecies: [] };
+      }
+      const obj = parsed as {
+        birds?: unknown;
+        records?: unknown;
+        dexSeenSpecies?: unknown;
+      };
+      const birds = Array.isArray(obj.birds)
+        ? obj.birds
+            .filter(
+              (item): item is PlacedBird =>
+                !!item &&
+                typeof item === "object" &&
+                typeof (item as PlacedBird).id === "string" &&
+                typeof (item as PlacedBird).xPercent === "number" &&
+                typeof (item as PlacedBird).yPercent === "number" &&
+                typeof (item as PlacedBird).size === "number"
+            )
+            .map((item) => ({
+              id: item.id,
+              xPercent: item.xPercent,
+              yPercent: item.yPercent,
+              size: item.size,
+            }))
+        : [];
+      const records = Array.isArray(obj.records)
+        ? obj.records
+            .filter(
+              (item): item is BirdRecord =>
+                !!item &&
+                typeof item === "object" &&
+                typeof (item as BirdRecord).id === "string" &&
+                typeof (item as BirdRecord).name === "string"
+            )
+            .map((item) => ({
+              id: item.id,
+              name: item.name,
+              feature: typeof item.feature === "string" ? item.feature : "",
+              photoUrl: typeof item.photoUrl === "string" ? item.photoUrl : null,
+              count: typeof item.count === "number" ? item.count : 1,
+              createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+            }))
+        : [];
+      const dexSeen = Array.isArray(obj.dexSeenSpecies)
+        ? obj.dexSeenSpecies.filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+        : [];
+      return { birds, records, dexSeenSpecies: dexSeen };
     } catch {
-      return { birds: [], records: [] };
+      return { birds: [], records: [], dexSeenSpecies: [] };
     }
   };
+
+  const buildGardenPayload = (): UserGardenPayload => ({
+    birds: gardenBirds,
+    records: birdRecords,
+    dexSeenSpecies,
+  });
+
+  const dexDisplayEntries = useMemo(
+    () => buildDexDisplayEntries(birdRecords, dexSeenSpecies),
+    [birdRecords, dexSeenSpecies]
+  );
 
   const loadGardenForUser = async (uid: string, options?: { mergeGuestIfEmpty?: boolean }) => {
     setIsGardenSyncing(true);
     try {
       const payload = await loadUserGarden(uid);
-      const guest = options?.mergeGuestIfEmpty ? readGuestGardenFromLocal() : { birds: [], records: [] };
+      const guest = options?.mergeGuestIfEmpty
+        ? readGuestGardenFromLocal()
+        : { birds: [], records: [], dexSeenSpecies: [] };
       if (payload.birds.length === 0 && guest.birds.length > 0) {
-        const merged = { birds: guest.birds, records: guest.records };
-        applyGardenPayload(merged.birds, merged.records);
+        const merged: UserGardenPayload = {
+          birds: guest.birds,
+          records: guest.records,
+          dexSeenSpecies: guest.dexSeenSpecies ?? [],
+        };
+        applyGardenPayload(merged);
         await saveUserGarden(uid, merged);
         return;
       }
-      applyGardenPayload(payload.birds, payload.records);
+      applyGardenPayload(payload);
     } catch {
-      applyGardenPayload([], []);
+      applyGardenPayload({ birds: [], records: [], dexSeenSpecies: [] });
     } finally {
       setIsGardenSyncing(false);
     }
   };
 
   const loadGuestGardenFromLocal = () => {
-    const guest = readGuestGardenFromLocal();
-    applyGardenPayload(guest.birds, guest.records);
+    applyGardenPayload(readGuestGardenFromLocal());
   };
 
   useEffect(() => {
@@ -326,7 +470,7 @@ export default function Home() {
         clearTimeout(saveGardenTimerRef.current);
       }
       saveGardenTimerRef.current = setTimeout(() => {
-        void saveUserGarden(userId, { birds: gardenBirds, records: birdRecords }).catch(() => {
+        void saveUserGarden(userId, buildGardenPayload()).catch(() => {
           // 네트워크/권한 오류 시 UI는 유지
         });
       }, 600);
@@ -338,11 +482,11 @@ export default function Home() {
     }
 
     try {
-      window.localStorage.setItem(GARDEN_STORAGE_KEY, JSON.stringify(gardenBirds));
+      window.localStorage.setItem(GARDEN_STORAGE_KEY, JSON.stringify(buildGardenPayload()));
     } catch {
       // localStorage 저장 실패 시 무시
     }
-  }, [gardenBirds, birdRecords, isGardenHydrated, isGardenSyncing, userId]);
+  }, [gardenBirds, birdRecords, dexSeenSpecies, isGardenHydrated, isGardenSyncing, userId]);
 
   const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
@@ -446,6 +590,15 @@ export default function Home() {
     }
   };
 
+  const closeDex = () => {
+    const unlocked = [...getUnlockedSpeciesNames(birdRecords)];
+    if (unlocked.length > 0) {
+      setDexSeenSpecies((prev) => [...new Set([...prev, ...unlocked])]);
+    }
+    setIsDexOpen(false);
+    setIsMenuOpen(false);
+  };
+
   const handleMenuItemActivate = (label: string) => {
     if (label === "도감") {
       setIsDexOpen(true);
@@ -460,33 +613,52 @@ export default function Home() {
     }
   };
 
-  const persistGarden = async (uid: string, birds: PlacedBird[], records: BirdRecord[]) => {
-    await saveUserGarden(uid, { birds, records });
+  const persistGarden = async (uid: string, payload: UserGardenPayload) => {
+    await saveUserGarden(uid, payload);
+  };
+
+  const closeRegistrationConfirm = () => {
+    setRegistrationConfirm(null);
+    setIsBirdListOpen(false);
+    setIsBirdInfoScreenOpen(false);
+    resetBirdFormDraft();
   };
 
   const submitBirdRegistration = async () => {
     const isUnlisted = birdRegistrationMode === "unlisted";
     const amount = isUnlisted ? 1 : Math.max(1, birdCount);
+    const displayName = birdName.trim() || (isUnlisted ? "이름 없는 조류" : "청둥오리");
+    const capturedPhoto = photoPreviewUrl;
     const newBirds = createGardenBirds(amount, gardenBirds.length);
     const newRecord: BirdRecord = {
       id: `record-${Date.now()}`,
-      name: birdName.trim() || (isUnlisted ? "이름 없는 조류" : "청둥오리"),
+      name: displayName,
       feature: birdFeature.trim(),
-      photoUrl: photoPreviewUrl,
+      photoUrl: capturedPhoto,
       count: amount,
       createdAt: new Date().toISOString(),
     };
     const nextBirds = [...gardenBirds, ...newBirds];
     const nextRecords = [...birdRecords, newRecord];
+    const totalSightings = countSpeciesSightings(nextRecords, displayName);
 
     setGardenBirds(nextBirds);
     setBirdRecords(nextRecords);
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
+    setRegistrationConfirm({
+      birdName: displayName,
+      photoUrl: capturedPhoto,
+      totalSightings,
+    });
 
     if (userId) {
       try {
-        await persistGarden(userId, nextBirds, nextRecords);
+        await persistGarden(userId, {
+          birds: nextBirds,
+          records: nextRecords,
+          dexSeenSpecies,
+        });
       } catch {
         // 저장 실패해도 화면 상태는 유지
       }
@@ -529,27 +701,58 @@ export default function Home() {
     resetAuthForm();
   };
 
+  const sanitizeAuthId = (id: string) => id.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
+
+  /** Supabase는 @birdy.local 같은 주소를 거부하므로 실제 도메인 형식을 씁니다. */
   const normalizeAuthEmail = (idOrEmail: string) => {
     const trimmed = idOrEmail.trim();
     if (trimmed.includes("@")) {
-      return trimmed;
+      return trimmed.toLowerCase();
     }
-    return `${trimmed}@birdy.local`;
+    const local = sanitizeAuthId(trimmed);
+    if (!local) {
+      throw new Error("INVALID_AUTH_ID");
+    }
+    return `${local}@users.birdy-garden.app`;
+  };
+
+  const authEmailsForLogin = (idOrEmail: string) => {
+    const trimmed = idOrEmail.trim();
+    if (trimmed.includes("@")) {
+      return [trimmed.toLowerCase()];
+    }
+    const local = sanitizeAuthId(trimmed);
+    if (!local) {
+      return [];
+    }
+    return [`${local}@users.birdy-garden.app`, `${local}@birdy.local`];
   };
 
   const mapAuthErrorMessage = (message: string) => {
     const lower = message.toLowerCase();
+    if (lower.includes("invalid_auth_id") || lower.includes("invalid auth")) {
+      return "아이디는 영문, 숫자, _(밑줄)만 사용할 수 있어요.";
+    }
     if (lower.includes("already registered") || lower.includes("already been registered")) {
       return "이미 가입된 아이디예요. 로그인해 주세요.";
     }
     if (lower.includes("invalid login credentials")) {
       return "아이디 또는 비밀번호가 맞지 않아요.";
     }
-    if (lower.includes("email not confirmed")) {
-      return "이메일 인증이 필요해요. Supabase에서 이메일 확인을 끄거나 메일을 확인해 주세요.";
+    if (lower.includes("email_address_invalid") || lower.includes("invalid email")) {
+      return "아이디 형식이 올바르지 않아요. 영문·숫자만 사용해 보세요.";
+    }
+    if (lower.includes("email not confirmed") || lower.includes("email_address_not_authorized")) {
+      return "이메일 확인이 켜져 있어요. Supabase 대시보드에서 Confirm email을 끄거나, 가입 메일을 확인해 주세요.";
+    }
+    if (lower.includes("signup") && lower.includes("disabled")) {
+      return "회원가입이 꺼져 있어요. Supabase Authentication 설정을 확인해 주세요.";
     }
     if (lower.includes("password")) {
       return "비밀번호는 6자 이상으로 입력해 주세요.";
+    }
+    if (lower.includes("supabase 환경 변수")) {
+      return "서버에 Supabase 설정이 없어요. Vercel 환경 변수를 확인해 주세요.";
     }
     return message;
   };
@@ -577,17 +780,33 @@ export default function Home() {
       setIsLoginSubmitting(true);
       setLoginMessage("");
       const supabase = getSupabaseBrowserClient();
-      const loginAsEmail = normalizeAuthEmail(loginId);
-      const { error } = await supabase.auth.signInWithPassword({
-        email: loginAsEmail,
-        password: loginPassword,
-      });
-      if (error) {
-        setLoginMessage(`로그인 실패: ${mapAuthErrorMessage(error.message)}`);
+      const emails = authEmailsForLogin(loginId);
+      if (emails.length === 0) {
+        setLoginMessage("아이디는 영문, 숫자, _(밑줄)만 사용할 수 있어요.");
         return;
       }
+
+      let signedIn = false;
+      let lastError = "";
+      for (const email of emails) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password: loginPassword,
+        });
+        if (!error) {
+          signedIn = true;
+          break;
+        }
+        lastError = error.message;
+      }
+
+      if (!signedIn) {
+        setLoginMessage(`로그인 실패: ${mapAuthErrorMessage(lastError)}`);
+        return;
+      }
+
       await completeAuthSession(
-        loginId.trim() || displayIdFromAuthEmail(loginAsEmail),
+        loginId.trim() || displayIdFromAuthEmail(emails[0]),
         "로그인 성공! 내 정원 데이터를 불러왔어요."
       );
     } catch (error) {
@@ -642,6 +861,23 @@ export default function Home() {
 
       if (data.user?.identities && data.user.identities.length === 0) {
         setLoginMessage("이미 가입된 아이디예요. 로그인해 주세요.");
+        setAuthMode("login");
+        return;
+      }
+
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: signUpEmail,
+        password: loginPassword,
+      });
+      if (!signInError && signInData.session?.user?.id) {
+        await completeAuthSession(trimmedId, "회원가입 완료! 환영해요.");
+        return;
+      }
+
+      if (signInError?.message.toLowerCase().includes("email not confirmed")) {
+        setLoginMessage(
+          "가입은 됐지만 이메일 확인이 필요해요. Supabase → Authentication → Providers → Email에서 Confirm email을 끄고 다시 시도해 주세요."
+        );
         setAuthMode("login");
         return;
       }
@@ -1154,10 +1390,75 @@ export default function Home() {
           </div>
         ) : null}
 
+        {registrationConfirm ? (
+          <div className="bird-confirm-screen" role="dialog" aria-modal="true" aria-label="등록 확정">
+            <header className="bird-confirm-header">
+              <button
+                type="button"
+                className="bird-confirm-back"
+                onClick={closeRegistrationConfirm}
+                aria-label="홈으로 돌아가기"
+              >
+                <img
+                  src="/left.png"
+                  alt=""
+                  width={48}
+                  height={48}
+                  decoding="sync"
+                  fetchPriority="high"
+                  className="bird-confirm-back-img"
+                />
+              </button>
+              <h1 className="bird-confirm-title">짹짹짹!</h1>
+            </header>
+
+            <div className="bird-confirm-body">
+              <div className="bird-confirm-photo-wrap">
+                <span className="bird-confirm-confetti bird-confirm-confetti--tl" aria-hidden>
+                  🎉
+                </span>
+                <span className="bird-confirm-confetti bird-confirm-confetti--br" aria-hidden>
+                  🎉
+                </span>
+                <div className="bird-confirm-photo-frame">
+                  {registrationConfirm.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={registrationConfirm.photoUrl}
+                      alt={registrationConfirm.birdName}
+                      className="bird-confirm-photo-img"
+                    />
+                  ) : (
+                    <div className="bird-confirm-photo-default">
+                      <Image
+                        src={DEFAULT_BIRD_IMAGE}
+                        alt={registrationConfirm.birdName}
+                        fill
+                        sizes="240px"
+                        className="bird-confirm-photo-default-img"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <p className="bird-confirm-message">
+                <span className="bird-confirm-message-name">{registrationConfirm.birdName}</span>를 벌써{" "}
+                <span className="bird-confirm-message-count">{registrationConfirm.totalSightings}</span>번이나
+                발견하셨네요!
+              </p>
+
+              <button type="button" className="bird-confirm-home-btn" onClick={closeRegistrationConfirm}>
+                홈으로 가기
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {isDexOpen ? (
           <div className="bird-dex-screen" role="dialog" aria-modal="true" aria-label="조류 도감">
             <header className="bird-dex-header">
-              <button type="button" className="bird-dex-close" onClick={() => setIsDexOpen(false)} aria-label="도감 닫기">
+              <button type="button" className="bird-dex-close" onClick={closeDex} aria-label="도감 닫기">
                 <img
                   src="/x.png"
                   alt=""
@@ -1174,7 +1475,7 @@ export default function Home() {
 
             <div className="bird-dex-scroll">
               <div className="bird-dex-grid">
-                {DEX_ENTRIES.map((entry) => (
+                {dexDisplayEntries.map((entry) => (
                   <div
                     key={entry.id}
                     className={`bird-dex-card${entry.unlocked ? "" : " bird-dex-card--locked"}`}
@@ -1187,13 +1488,22 @@ export default function Home() {
                     <div className="bird-dex-card-visual">
                       {entry.unlocked ? (
                         <div className="bird-dex-unlocked-img-wrap">
-                          <Image
-                            src="/test.png"
-                            alt={entry.name ?? "청둥오리"}
-                            fill
-                            sizes="120px"
-                            className="bird-dex-card-img"
-                          />
+                          {entry.photoUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={entry.photoUrl}
+                              alt={entry.name ?? "조류"}
+                              className="bird-dex-card-img bird-dex-card-img--uploaded"
+                            />
+                          ) : (
+                            <Image
+                              src={entry.imageSrc}
+                              alt={entry.name ?? "조류"}
+                              fill
+                              sizes="120px"
+                              className="bird-dex-card-img"
+                            />
+                          )}
                         </div>
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element
