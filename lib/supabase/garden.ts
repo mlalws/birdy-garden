@@ -19,7 +19,12 @@ export type PlacedBird = {
 
 export type BirdRecord = {
   id: string;
+  /** 사용자가 붙인 이름 */
   name: string;
+  /** 목록상 종 이름 (캘린더·도감용) */
+  speciesName?: string;
+  /** 목록에서 고른 조류 id */
+  listBirdId?: string;
   feature: string;
   photoUrl: string | null;
   count: number;
@@ -85,14 +90,23 @@ function normalizePayload(raw: unknown): UserGardenPayload {
             typeof (item as BirdRecord).id === "string" &&
             typeof (item as BirdRecord).name === "string"
         )
-        .map((item) => ({
-          id: item.id,
-          name: item.name,
-          feature: typeof item.feature === "string" ? item.feature : "",
-          photoUrl: typeof item.photoUrl === "string" ? item.photoUrl : null,
-          count: typeof item.count === "number" ? item.count : 1,
-          createdAt: typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
-        }))
+        .map((item) => {
+          const rawRecord = item as BirdRecord;
+          return {
+            id: rawRecord.id,
+            name: rawRecord.name,
+            speciesName:
+              typeof rawRecord.speciesName === "string" && rawRecord.speciesName.trim()
+                ? rawRecord.speciesName.trim()
+                : undefined,
+            listBirdId: typeof rawRecord.listBirdId === "string" ? rawRecord.listBirdId : undefined,
+            feature: typeof rawRecord.feature === "string" ? rawRecord.feature : "",
+            photoUrl: typeof rawRecord.photoUrl === "string" ? rawRecord.photoUrl : null,
+            count: typeof rawRecord.count === "number" ? rawRecord.count : 1,
+            createdAt:
+              typeof rawRecord.createdAt === "string" ? rawRecord.createdAt : new Date().toISOString(),
+          };
+        })
     : [];
 
   const dexSeenSpecies = Array.isArray((obj as { dexSeenSpecies?: unknown }).dexSeenSpecies)

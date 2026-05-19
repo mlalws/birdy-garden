@@ -34,6 +34,7 @@ import {
   dateKeyHasGarden,
   formatMonthLabel,
   getKstDateKey,
+  getRecordSpeciesLabel,
   parseDateKey,
   resolveDaySnapshot,
   shiftCalendarMonth,
@@ -87,10 +88,12 @@ type DexDisplayEntry = {
 };
 
 const getUnlockedSpeciesNames = (records: BirdRecord[]) =>
-  new Set(records.map((record) => record.name.trim()).filter(Boolean));
+  new Set(records.map((record) => getRecordSpeciesLabel(record)).filter(Boolean));
 
 const getSpeciesPhotoFromRecords = (records: BirdRecord[], speciesName: string) => {
-  const match = [...records].reverse().find((record) => record.name.trim() === speciesName && record.photoUrl);
+  const match = [...records]
+    .reverse()
+    .find((record) => getRecordSpeciesLabel(record) === speciesName && record.photoUrl);
   return match?.photoUrl ?? null;
 };
 
@@ -153,7 +156,7 @@ const countSpeciesSightings = (records: BirdRecord[], speciesName: string) => {
     return 0;
   }
   return records.reduce((sum, record) => {
-    if (record.name.trim() === key) {
+    if (getRecordSpeciesLabel(record) === key) {
       return sum + Math.max(1, record.count);
     }
     return sum;
@@ -950,10 +953,15 @@ export default function Home() {
     const displayName = birdName.trim() || (isUnlisted ? "이름 없는 조류" : "청둥오리");
     const capturedPhoto = photoPreviewUrl;
     const recordId = `record-${Date.now()}`;
+    const speciesNameForConfirm = isUnlisted
+      ? displayName
+      : registrationSpeciesName?.trim() || displayName;
     const newBirds = createGardenBirds(amount, gardenBirds.length, recordId);
     const newRecord: BirdRecord = {
       id: recordId,
       name: displayName,
+      speciesName: speciesNameForConfirm,
+      listBirdId: isUnlisted ? undefined : selectedListBirdId ?? undefined,
       feature: birdFeature.trim(),
       photoUrl: capturedPhoto,
       count: amount,
@@ -961,16 +969,13 @@ export default function Home() {
     };
     const nextBirds = [...gardenBirds, ...newBirds];
     const nextRecords = [...birdRecords, newRecord];
-    const totalSightings = countSpeciesSightings(nextRecords, displayName);
+    const totalSightings = countSpeciesSightings(nextRecords, speciesNameForConfirm);
 
     markGardenDirty();
     setGardenBirds(nextBirds);
     setBirdRecords(nextRecords);
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
-    const speciesNameForConfirm = isUnlisted
-      ? displayName
-      : registrationSpeciesName?.trim() || displayName;
 
     setRegistrationConfirm({
       speciesName: speciesNameForConfirm,

@@ -47,6 +47,21 @@ export type DayBirdStats = {
   bySpecies: { name: string; count: number }[];
 };
 
+const LIST_SPECIES_BY_ID: Record<string, string> = {
+  mallard: "청둥오리",
+};
+
+/** 캘린더·도감에 쓸 목록상 종 이름 */
+export function getRecordSpeciesLabel(record: BirdRecord): string {
+  if (record.speciesName?.trim()) {
+    return record.speciesName.trim();
+  }
+  if (record.listBirdId && LIST_SPECIES_BY_ID[record.listBirdId]) {
+    return LIST_SPECIES_BY_ID[record.listBirdId];
+  }
+  return record.name.trim() || "이름 없는 조류";
+}
+
 export function computeDayBirdStats(archive: DailyGardenArchive | undefined): DayBirdStats {
   if (!archive || archive.birds.length === 0) {
     return { total: 0, bySpecies: [] };
@@ -57,7 +72,7 @@ export function computeDayBirdStats(archive: DailyGardenArchive | undefined): Da
 
   for (const bird of archive.birds) {
     const record = bird.recordId ? recordById.get(bird.recordId) : undefined;
-    const name = record?.name?.trim() || "이름 없는 조류";
+    const name = record ? getRecordSpeciesLabel(record) : "이름 없는 조류";
     speciesCounts.set(name, (speciesCounts.get(name) ?? 0) + 1);
   }
 

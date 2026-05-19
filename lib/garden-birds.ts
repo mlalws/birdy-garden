@@ -47,7 +47,7 @@ export function createGardenBirds(count: number, offset: number, recordId: strin
       yPercent: onShore
         ? clamp(base.yPercent + (ring % 2), 56, 68)
         : clamp(base.yPercent + (ring % 3) - 1, 70, 88),
-      size: clamp(base.size * 2 - (ring % 2), 36, 58),
+      size: clamp(base.size + (ring % 2), 20, 30),
       facing: pickFacing(),
       inWater: !onShore,
     };
