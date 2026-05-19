@@ -1823,19 +1823,20 @@ body {
 
 .bird-new-register-star {
   position: absolute;
-  top: -6px;
-  font-size: 14px;
+  top: -10px;
+  font-size: 20px;
   line-height: 1;
-  color: #e85c4a;
-  text-shadow: 0 1px 0 rgba(80, 30, 20, 0.35);
+  filter: drop-shadow(0 1px 2px rgba(168, 198, 130, 0.45));
 }
 
 .bird-new-register-star--left {
-  left: 10px;
+  left: 8px;
+  transform: rotate(-14deg);
 }
 
 .bird-new-register-star--right {
-  right: 10px;
+  right: 8px;
+  transform: rotate(12deg) scaleX(-1);
 }
 
 .bird-new-register-scroll {
@@ -1977,19 +1978,21 @@ body {
   width: 100%;
   margin-top: 4px;
   padding: 14px 16px;
-  border: 1px solid rgba(107, 72, 44, 0.5);
+  border: 1px solid rgba(196, 218, 168, 0.95);
   border-radius: 12px;
-  background: linear-gradient(180deg, #6f9a4a 0%, #4f7a34 55%, #3d6328 100%);
-  color: #fffef8;
+  background: linear-gradient(180deg, #f4fbe8 0%, #e8f5d6 48%, #dcefc8 100%);
+  color: #5f7348;
   font-size: 16px;
   font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(61, 99, 40, 0.28);
+  box-shadow:
+    0 3px 10px rgba(168, 198, 130, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
   -webkit-tap-highlight-color: transparent;
 }
 
 .bird-new-register-submit:active {
-  opacity: 0.92;
+  background: linear-gradient(180deg, #eaf6dc 0%, #dff0cc 48%, #d2e9c0 100%);
 }
 
 @media (max-width: 640px) {

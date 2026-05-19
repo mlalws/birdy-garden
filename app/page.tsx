@@ -1588,10 +1588,10 @@ export default function Home() {
               </button>
               <div className="bird-new-register-title-plank">
                 <span className="bird-new-register-star bird-new-register-star--left" aria-hidden>
-                  ★
+                  🌿
                 </span>
                 <span className="bird-new-register-star bird-new-register-star--right" aria-hidden>
-                  ★
+                  🍃
                 </span>
                 <h1 className="bird-new-register-title">신규 조류 등록!!</h1>
               </div>
