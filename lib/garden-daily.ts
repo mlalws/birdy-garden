@@ -1,3 +1,4 @@
+import { migrateBirdRecord } from "@/lib/garden-records";
 import type { BirdRecord, DailyGardenArchive, PlacedBird, UserGardenPayload } from "@/lib/supabase/garden";
 
 const KST_TIMEZONE = "Asia/Seoul";
@@ -47,19 +48,13 @@ export type DayBirdStats = {
   bySpecies: { name: string; count: number }[];
 };
 
-const LIST_SPECIES_BY_ID: Record<string, string> = {
-  mallard: "청둥오리",
-};
-
 /** 캘린더·도감에 쓸 목록상 종 이름 */
 export function getRecordSpeciesLabel(record: BirdRecord): string {
-  if (record.speciesName?.trim()) {
-    return record.speciesName.trim();
+  const migrated = migrateBirdRecord(record);
+  if (migrated.speciesName?.trim()) {
+    return migrated.speciesName.trim();
   }
-  if (record.listBirdId && LIST_SPECIES_BY_ID[record.listBirdId]) {
-    return LIST_SPECIES_BY_ID[record.listBirdId];
-  }
-  return record.name.trim() || "이름 없는 조류";
+  return migrated.name.trim() || "이름 없는 조류";
 }
 
 export function computeDayBirdStats(archive: DailyGardenArchive | undefined): DayBirdStats {

@@ -40,6 +40,7 @@ import {
   shiftCalendarMonth,
   toDateKey,
 } from "@/lib/garden-daily";
+import { gardenPayloadNeedsMigration, migrateGardenPayload } from "@/lib/garden-records";
 import { getGardenStorageErrorMessage } from "@/lib/supabase/garden-errors";
 import {
   loadUserGarden,
@@ -327,16 +328,6 @@ export default function Home() {
   );
 
   useEffect(() => {
-    const scrollElement = scrollRef.current;
-
-    if (!scrollElement) {
-      return;
-    }
-
-    scrollElement.scrollLeft = (scrollElement.scrollWidth - scrollElement.clientWidth) / 2;
-  }, []);
-
-  useEffect(() => {
     if (!selectedGardenBirdId) {
       return;
     }
@@ -385,11 +376,13 @@ export default function Home() {
   }, [isProfileOpen]);
 
   const applyGardenPayload = (payload: UserGardenPayload) => {
-    setGardenBirds(payload.birds);
-    setBirdRecords(payload.records);
-    setDexSeenSpecies(payload.dexSeenSpecies ?? []);
-    setDailyArchives(payload.dailyArchives ?? {});
-    setCurrentGardenDate(payload.currentGardenDate ?? getKstDateKey());
+    const migrated = migrateGardenPayload(payload);
+    setGardenBirds(migrated.birds);
+    setBirdRecords(migrated.records);
+    setDexSeenSpecies(migrated.dexSeenSpecies ?? []);
+    setDailyArchives(migrated.dailyArchives ?? {});
+    setCurrentGardenDate(migrated.currentGardenDate ?? getKstDateKey());
+    return migrated;
   };
 
   const clearLegacyGuestStorage = () => {
@@ -488,8 +481,8 @@ export default function Home() {
           currentGardenDate: payloadAfterRollover.currentGardenDate ?? getKstDateKey(),
           profile: payloadAfterRollover.profile,
         };
-        applyGardenPayload(merged);
-        await saveUserGarden(uid, merged);
+        const migratedMerged = applyGardenPayload(merged);
+        await saveUserGarden(uid, migratedMerged);
         guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
         clearLegacyGuestStorage();
         applyProfileDisplay(merged.profile ?? null, options?.emailFallback);
@@ -497,13 +490,16 @@ export default function Home() {
         gardenDirtyRef.current = false;
         return;
       }
-      applyGardenPayload(payloadAfterRollover);
-      applyProfileDisplay(payloadAfterRollover.profile ?? null, options?.emailFallback);
+      const migratedPayload = applyGardenPayload(payloadAfterRollover);
+      applyProfileDisplay(migratedPayload.profile ?? null, options?.emailFallback);
       loadedGardenUserIdRef.current = uid;
-      gardenDirtyRef.current = false;
       setGardenSyncError("");
-      if (didRollover) {
-        await saveUserGarden(uid, payloadAfterRollover);
+      const needsSave = didRollover || gardenPayloadNeedsMigration(payloadAfterRollover);
+      if (needsSave) {
+        await saveUserGarden(uid, migratedPayload);
+        gardenDirtyRef.current = false;
+      } else {
+        gardenDirtyRef.current = false;
       }
     } catch (error) {
       if (loadSeq !== gardenLoadSeqRef.current) {
@@ -1456,6 +1452,7 @@ export default function Home() {
             onRequestDelete={requestGardenBirdDelete}
             onConfirmDelete={() => void confirmGardenBirdDelete()}
             onCancelDelete={cancelGardenBirdDelete}
+            scrollToCenterOnLayout
           />
         </div>
 

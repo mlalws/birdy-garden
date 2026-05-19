@@ -17,6 +17,8 @@ type GardenWorldViewProps = {
   onConfirmDelete?: () => void;
   onCancelDelete?: () => void;
   className?: string;
+  /** 배경 크기 계산 후 가로 스크롤을 정중앙으로 */
+  scrollToCenterOnLayout?: boolean;
 };
 
 export function GardenWorldView({
@@ -30,12 +32,26 @@ export function GardenWorldView({
   onConfirmDelete,
   onCancelDelete,
   className = "",
+  scrollToCenterOnLayout = false,
 }: GardenWorldViewProps) {
   const worldRef = useRef<HTMLDivElement>(null);
+  const hasCenteredScrollRef = useRef(false);
   const [worldSize, setWorldSize] = useState<{ width: number; height: number } | null>(null);
   const isMini = className.includes("garden-world--mini");
 
+  const centerGardenScroll = (scrollEl: HTMLElement) => {
+    const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+    if (maxScroll <= 0) {
+      return;
+    }
+    scrollEl.scrollLeft = maxScroll / 2;
+  };
+
   useLayoutEffect(() => {
+    if (isMini) {
+      return;
+    }
+
     const scrollEl = worldRef.current?.closest(".garden-scroll, .bird-calendar-preview") as HTMLElement | null;
     if (!scrollEl) {
       return;
@@ -58,10 +74,15 @@ export function GardenWorldView({
         }
         const aspect = img.naturalWidth / img.naturalHeight;
         const widthAtFullHeight = viewH * aspect;
-        setWorldSize({
-          width: Math.ceil(Math.max(viewW, widthAtFullHeight)),
-          height: viewH,
-        });
+        const nextWidth = Math.ceil(Math.max(viewW, widthAtFullHeight));
+        setWorldSize({ width: nextWidth, height: viewH });
+
+        if (scrollToCenterOnLayout && !isMini && !hasCenteredScrollRef.current) {
+          requestAnimationFrame(() => {
+            centerGardenScroll(scrollEl);
+            hasCenteredScrollRef.current = true;
+          });
+        }
       };
     };
 
@@ -72,14 +93,28 @@ export function GardenWorldView({
       cancelled = true;
       observer.disconnect();
     };
-  }, [isMini]);
+  }, [isMini, scrollToCenterOnLayout]);
+
+  useLayoutEffect(() => {
+    if (!scrollToCenterOnLayout || isMini || worldSize === null || hasCenteredScrollRef.current) {
+      return;
+    }
+    const scrollEl = worldRef.current?.closest(".garden-scroll") as HTMLElement | null;
+    if (!scrollEl || scrollEl.classList.contains("bird-archive-garden-scroll")) {
+      return;
+    }
+    centerGardenScroll(scrollEl);
+    hasCenteredScrollRef.current = true;
+  }, [worldSize, scrollToCenterOnLayout, isMini]);
 
   const recordById = new Map(records.map((record) => [record.id, record]));
   const selectedBird = birds.find((bird) => bird.id === selectedBirdId) ?? null;
   const selectedRecord = selectedBird?.recordId ? recordById.get(selectedBird.recordId) : undefined;
+  const birdSizeScale = isMini ? 0.3 : 1;
 
-  const worldStyle =
-    worldSize !== null
+  const worldStyle = isMini
+    ? { width: "100%", height: "100%" }
+    : worldSize !== null
       ? { width: worldSize.width, height: worldSize.height }
       : { height: "100%", minWidth: "100%" as const };
 
@@ -94,7 +129,8 @@ export function GardenWorldView({
       <div className="garden-world-birds" aria-hidden={birds.length === 0}>
         {birds.map((bird) => {
           const isBubbleOpen = !readOnly && selectedBird?.id === bird.id;
-          const bubbleSize = Math.round(bird.size * 1.8);
+          const displaySize = Math.max(8, Math.round(bird.size * birdSizeScale));
+          const bubbleSize = Math.round(displaySize * 1.8);
 
           return (
             <div
@@ -105,7 +141,7 @@ export function GardenWorldView({
               {readOnly ? (
                 <div
                   className={`bird bird--static${bird.inWater !== false ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}`}
-                  style={{ width: `${bird.size}px`, height: `${bird.size}px` }}
+                  style={{ width: `${displaySize}px`, height: `${displaySize}px` }}
                   aria-hidden
                 >
                   <span className="bird-sprite">
@@ -116,7 +152,7 @@ export function GardenWorldView({
                 <button
                   type="button"
                   className={`bird${bird.inWater !== false ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}${isBubbleOpen ? " bird--selected" : ""}`}
-                  style={{ width: `${bird.size}px`, height: `${bird.size}px` }}
+                  style={{ width: `${displaySize}px`, height: `${displaySize}px` }}
                   onClick={() => onBirdClick?.(bird.id)}
                   aria-label="정원에 둔 조류 보기"
                   aria-expanded={isBubbleOpen}

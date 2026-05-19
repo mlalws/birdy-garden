@@ -2208,10 +2208,29 @@ body {
 
 .bird-calendar-preview .garden-world--mini {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
   pointer-events: none;
+}
+
+.bird-calendar-preview .garden-world--mini .garden-world-bg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+}
+
+.bird-calendar-preview .garden-world--mini .garden-world-birds {
+  pointer-events: none;
+}
+
+.bird-calendar-preview .garden-world--mini .bird-anchor {
+  z-index: 2;
+}
+
+.bird-calendar-preview .garden-world--mini .bird-sprite-img {
+  object-fit: contain;
 }
 
 .bird-calendar-preview-empty {
