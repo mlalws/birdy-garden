@@ -18,12 +18,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className="h-full antialiased">
+    <html lang="ko" className="h-full font-sans antialiased">
       <head>
+        <link rel="preload" href="/fonts/NanumSquareRoundB.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
         <link rel="preload" href="/x.png" as="image" />
         <link rel="preload" href="/left.png" as="image" />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
   );
 }

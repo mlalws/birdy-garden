@@ -3,7 +3,23 @@
 @font-face {
   font-family: "BirdyCustom";
   src: url("/fonts/NanumSquareRoundB.ttf") format("truetype");
-  font-weight: 100 900;
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BirdyCustom";
+  src: url("/fonts/NanumSquareRoundB.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "BirdyCustom";
+  src: url("/fonts/NanumSquareRoundB.ttf") format("truetype");
+  font-weight: 800;
   font-style: normal;
   font-display: swap;
 }
@@ -11,14 +27,14 @@
 :root {
   --background: #c7e8f9;
   --foreground: #57361f;
-  --font-app: "BirdyCustom", var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-app: "BirdyCustom", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-app);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -32,10 +48,29 @@
   box-sizing: border-box;
 }
 
+html {
+  font-family: var(--font-app);
+}
+
 body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-app);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+.garden-page,
+.garden-page button,
+.garden-page input,
+.garden-page textarea,
+.garden-page select {
   font-family: var(--font-app);
 }
 
@@ -84,7 +119,6 @@ body {
   flex: 1;
   overflow-x: auto;
   overflow-y: hidden;
-  scroll-snap-type: x mandatory;
 }
 
 .garden-scroll::-webkit-scrollbar {
@@ -101,7 +135,6 @@ body {
   display: inline-block;
   height: 100%;
   min-height: 0;
-  scroll-snap-align: start;
   vertical-align: top;
   line-height: 0;
 }

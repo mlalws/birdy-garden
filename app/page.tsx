@@ -3,6 +3,7 @@
 import Image from "next/image";
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -229,6 +230,7 @@ export default function Home() {
   const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState(() => getKstDateKey());
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasCenteredGardenScrollRef = useRef(false);
   const archiveScrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -326,6 +328,53 @@ export default function Home() {
     ],
     []
   );
+
+  useLayoutEffect(() => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) {
+      return;
+    }
+
+    const tryCenter = () => {
+      if (hasCenteredGardenScrollRef.current) {
+        return true;
+      }
+      const maxScroll = scrollEl.scrollWidth - scrollEl.clientWidth;
+      if (maxScroll < 8) {
+        return false;
+      }
+      scrollEl.scrollLeft = Math.round(maxScroll / 2);
+      hasCenteredGardenScrollRef.current = true;
+      return true;
+    };
+
+    const scheduleCenter = () => {
+      if (tryCenter()) {
+        return;
+      }
+      requestAnimationFrame(() => {
+        if (tryCenter()) {
+          return;
+        }
+        requestAnimationFrame(() => {
+          tryCenter();
+        });
+      });
+    };
+
+    const observer = new ResizeObserver(() => {
+      scheduleCenter();
+    });
+    observer.observe(scrollEl);
+
+    const world = scrollEl.querySelector(".garden-world");
+    if (world instanceof HTMLElement) {
+      observer.observe(world);
+    }
+
+    scheduleCenter();
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!selectedGardenBirdId) {
@@ -1452,7 +1501,6 @@ export default function Home() {
             onRequestDelete={requestGardenBirdDelete}
             onConfirmDelete={() => void confirmGardenBirdDelete()}
             onCancelDelete={cancelGardenBirdDelete}
-            scrollToCenterOnLayout
           />
         </div>
 
