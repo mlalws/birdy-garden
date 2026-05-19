@@ -26,11 +26,21 @@ export type BirdRecord = {
   createdAt: string;
 };
 
+export type DailyGardenArchive = {
+  birds: PlacedBird[];
+  records: BirdRecord[];
+  savedAt: string;
+};
+
 export type UserGardenPayload = {
   birds: PlacedBird[];
   records: BirdRecord[];
   dexSeenSpecies?: string[];
   profile?: UserProfile;
+  /** KST YYYY-MM-DD — 오늘 라이브 정원이 속한 날 */
+  currentGardenDate?: string;
+  /** 날짜별 정원 스냅샷 */
+  dailyArchives?: Record<string, DailyGardenArchive>;
 };
 
 const EMPTY_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexSeenSpecies: [] };
@@ -93,7 +103,34 @@ function normalizePayload(raw: unknown): UserGardenPayload {
 
   const profile = normalizeUserProfile((obj as { profile?: unknown }).profile) ?? undefined;
 
-  return { birds, records, dexSeenSpecies, profile };
+  const currentGardenDate =
+    typeof (obj as { currentGardenDate?: unknown }).currentGardenDate === "string"
+      ? (obj as { currentGardenDate: string }).currentGardenDate
+      : undefined;
+
+  let dailyArchives: Record<string, DailyGardenArchive> | undefined;
+  const rawArchives = (obj as { dailyArchives?: unknown }).dailyArchives;
+  if (rawArchives && typeof rawArchives === "object") {
+    dailyArchives = {};
+    for (const [dateKey, value] of Object.entries(rawArchives as Record<string, unknown>)) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !value || typeof value !== "object") {
+        continue;
+      }
+      const entry = value as { birds?: unknown; records?: unknown; savedAt?: unknown };
+      const archivedBirds = Array.isArray(entry.birds) ? (entry.birds as PlacedBird[]) : [];
+      const archivedRecords = Array.isArray(entry.records) ? (entry.records as BirdRecord[]) : [];
+      if (archivedBirds.length === 0 && archivedRecords.length === 0) {
+        continue;
+      }
+      dailyArchives[dateKey] = {
+        birds: archivedBirds.filter((bird) => typeof bird.id === "string"),
+        records: archivedRecords.filter((record) => typeof record.id === "string" && typeof record.name === "string"),
+        savedAt: typeof entry.savedAt === "string" ? entry.savedAt : new Date().toISOString(),
+      };
+    }
+  }
+
+  return { birds, records, dexSeenSpecies, profile, currentGardenDate, dailyArchives };
 }
 
 export async function loadUserGarden(userId: string): Promise<UserGardenPayload> {

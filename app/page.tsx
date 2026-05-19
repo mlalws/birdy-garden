@@ -25,12 +25,26 @@ import {
   type UserProfile,
 } from "@/lib/profile";
 import { readProfileImageAsDataUrl } from "@/lib/profile-image";
+import { GardenWorldView } from "@/components/garden-world-view";
 import { createGardenBirds } from "@/lib/garden-birds";
+import {
+  applyGardenDayRollover,
+  buildCalendarCells,
+  computeDayBirdStats,
+  dateKeyHasGarden,
+  formatMonthLabel,
+  getKstDateKey,
+  parseDateKey,
+  resolveDaySnapshot,
+  shiftCalendarMonth,
+  toDateKey,
+} from "@/lib/garden-daily";
 import { getGardenStorageErrorMessage } from "@/lib/supabase/garden-errors";
 import {
   loadUserGarden,
   saveUserGarden,
   type BirdRecord,
+  type DailyGardenArchive,
   type PlacedBird,
   type UserGardenPayload,
 } from "@/lib/supabase/garden";
@@ -200,8 +214,18 @@ export default function Home() {
   const [selectedGardenBirdId, setSelectedGardenBirdId] = useState<string | null>(null);
   const [gardenBirdDeleteConfirm, setGardenBirdDeleteConfirm] = useState(false);
   const [gardenSyncError, setGardenSyncError] = useState("");
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isArchiveGardenOpen, setIsArchiveGardenOpen] = useState(false);
+  const [dailyArchives, setDailyArchives] = useState<Record<string, DailyGardenArchive>>({});
+  const [currentGardenDate, setCurrentGardenDate] = useState(() => getKstDateKey());
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = parseDateKey(getKstDateKey());
+    return { year: today.year, month: today.month };
+  });
+  const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState(() => getKstDateKey());
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const archiveScrollRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const saveGardenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -216,7 +240,35 @@ export default function Home() {
     birdRecords,
     dexSeenSpecies,
     userProfile,
+    dailyArchives,
+    currentGardenDate,
   });
+
+  const todayDateKey = getKstDateKey();
+
+  const selectedDaySnapshot = useMemo(
+    () => resolveDaySnapshot(selectedCalendarDateKey, dailyArchives, { birds: gardenBirds, records: birdRecords }),
+    [selectedCalendarDateKey, dailyArchives, gardenBirds, birdRecords]
+  );
+
+  const selectedDayStats = useMemo(
+    () => computeDayBirdStats(selectedDaySnapshot ?? undefined),
+    [selectedDaySnapshot]
+  );
+
+  const archiveViewSnapshot = useMemo(() => {
+    if (!isArchiveGardenOpen) {
+      return null;
+    }
+    return resolveDaySnapshot(selectedCalendarDateKey, dailyArchives, { birds: gardenBirds, records: birdRecords });
+  }, [isArchiveGardenOpen, selectedCalendarDateKey, dailyArchives, gardenBirds, birdRecords]);
+
+  const calendarCells = useMemo(
+    () => buildCalendarCells(calendarMonth.year, calendarMonth.month),
+    [calendarMonth.year, calendarMonth.month]
+  );
+
+  const calendarWeekdays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const;
 
   const profileAvatarUrl = userProfile?.avatarUrl ?? null;
 
@@ -333,6 +385,8 @@ export default function Home() {
     setGardenBirds(payload.birds);
     setBirdRecords(payload.records);
     setDexSeenSpecies(payload.dexSeenSpecies ?? []);
+    setDailyArchives(payload.dailyArchives ?? {});
+    setCurrentGardenDate(payload.currentGardenDate ?? getKstDateKey());
   };
 
   const clearLegacyGuestStorage = () => {
@@ -354,15 +408,44 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    gardenSnapshotRef.current = { gardenBirds, birdRecords, dexSeenSpecies, userProfile };
-  }, [gardenBirds, birdRecords, dexSeenSpecies, userProfile]);
+    gardenSnapshotRef.current = {
+      gardenBirds,
+      birdRecords,
+      dexSeenSpecies,
+      userProfile,
+      dailyArchives,
+      currentGardenDate,
+    };
+  }, [gardenBirds, birdRecords, dexSeenSpecies, userProfile, dailyArchives, currentGardenDate]);
 
   const buildGardenPayloadFromSnapshot = (snapshot = gardenSnapshotRef.current): UserGardenPayload => ({
     birds: snapshot.gardenBirds,
     records: snapshot.birdRecords,
     dexSeenSpecies: snapshot.dexSeenSpecies,
+    currentGardenDate: snapshot.currentGardenDate ?? getKstDateKey(),
+    dailyArchives: snapshot.dailyArchives ?? {},
     ...(snapshot.userProfile ? { profile: snapshot.userProfile } : {}),
   });
+
+  const runGardenDayRolloverIfNeeded = async (uid?: string | null) => {
+    const { payload: rolled, didRollover } = applyGardenDayRollover(buildGardenPayloadFromSnapshot());
+    if (!didRollover) {
+      return false;
+    }
+    applyGardenPayload(rolled);
+    if (uid) {
+      try {
+        await saveUserGarden(uid, rolled);
+        gardenDirtyRef.current = false;
+        setGardenSyncError("");
+      } catch (error) {
+        reportGardenSyncError(error);
+      }
+    } else {
+      guestSessionPayloadRef.current = rolled;
+    }
+    return true;
+  };
 
   const buildGardenPayload = (): UserGardenPayload => buildGardenPayloadFromSnapshot();
 
@@ -386,18 +469,21 @@ export default function Home() {
     const loadSeq = ++gardenLoadSeqRef.current;
     setIsGardenSyncing(true);
     try {
-      const payload = await loadUserGarden(uid);
+      const loaded = await loadUserGarden(uid);
+      const { payload: payloadAfterRollover, didRollover } = applyGardenDayRollover(loaded);
       if (loadSeq !== gardenLoadSeqRef.current) {
         return;
       }
 
       const sessionGuest = options?.mergeSessionGuestIfEmpty ? guestSessionPayloadRef.current : EMPTY_GARDEN_PAYLOAD;
-      if (payload.birds.length === 0 && sessionGuest.birds.length > 0) {
+      if (payloadAfterRollover.birds.length === 0 && sessionGuest.birds.length > 0) {
         const merged: UserGardenPayload = {
           birds: sessionGuest.birds,
           records: sessionGuest.records,
           dexSeenSpecies: sessionGuest.dexSeenSpecies ?? [],
-          profile: payload.profile,
+          dailyArchives: { ...payloadAfterRollover.dailyArchives, ...sessionGuest.dailyArchives },
+          currentGardenDate: payloadAfterRollover.currentGardenDate ?? getKstDateKey(),
+          profile: payloadAfterRollover.profile,
         };
         applyGardenPayload(merged);
         await saveUserGarden(uid, merged);
@@ -408,11 +494,14 @@ export default function Home() {
         gardenDirtyRef.current = false;
         return;
       }
-      applyGardenPayload(payload);
-      applyProfileDisplay(payload.profile ?? null, options?.emailFallback);
+      applyGardenPayload(payloadAfterRollover);
+      applyProfileDisplay(payloadAfterRollover.profile ?? null, options?.emailFallback);
       loadedGardenUserIdRef.current = uid;
       gardenDirtyRef.current = false;
       setGardenSyncError("");
+      if (didRollover) {
+        await saveUserGarden(uid, payloadAfterRollover);
+      }
     } catch (error) {
       if (loadSeq !== gardenLoadSeqRef.current) {
         return;
@@ -544,6 +633,7 @@ export default function Home() {
     };
     warm("/x.png");
     warm("/left.png");
+    warm("/background.jpg");
   }, []);
 
   const flushGardenSaveNow = async (uid: string) => {
@@ -595,6 +685,10 @@ export default function Home() {
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         onPageHide();
+        return;
+      }
+      if (document.visibilityState === "visible" && isGardenHydrated) {
+        void runGardenDayRolloverIfNeeded(userId);
       }
     };
     window.addEventListener("pagehide", onPageHide);
@@ -603,7 +697,17 @@ export default function Home() {
       window.removeEventListener("pagehide", onPageHide);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [userId]);
+  }, [userId, isGardenHydrated]);
+
+  useEffect(() => {
+    if (!isGardenHydrated) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void runGardenDayRolloverIfNeeded(userId);
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [isGardenHydrated, userId, currentGardenDate]);
 
   const resetBirdFormDraft = () => {
     setIsPhotoPopupOpen(false);
@@ -718,10 +822,39 @@ export default function Home() {
     setIsMenuOpen(false);
   };
 
+  const openCalendar = () => {
+    const today = parseDateKey(getKstDateKey());
+    setCalendarMonth({ year: today.year, month: today.month });
+    setSelectedCalendarDateKey(getKstDateKey());
+    setIsCalendarOpen(true);
+    setIsMenuOpen(false);
+  };
+
+  const closeCalendar = () => {
+    setIsCalendarOpen(false);
+    setIsMenuOpen(false);
+  };
+
+  const openArchiveGarden = () => {
+    if (!selectedDaySnapshot || selectedDaySnapshot.birds.length === 0) {
+      return;
+    }
+    setIsArchiveGardenOpen(true);
+    setIsCalendarOpen(false);
+  };
+
+  const closeArchiveGarden = () => {
+    setIsArchiveGardenOpen(false);
+    setIsCalendarOpen(true);
+  };
+
   const handleMenuItemActivate = (label: string) => {
     if (label === "도감") {
       setIsDexOpen(true);
       setIsMenuOpen(false);
+    }
+    if (label === "캘린더") {
+      openCalendar();
     }
   };
 
@@ -1309,77 +1442,23 @@ export default function Home() {
         </div>
 
         <div className="garden-scroll" ref={scrollRef}>
-          <div className="garden-world">
-            {gardenBirds.map((bird) => {
-              const isBubbleOpen = selectedGardenBird?.id === bird.id;
-              const bubbleSize = Math.round(bird.size * 1.8);
-
-              return (
-                <div
-                  key={bird.id}
-                  className={`bird-anchor${isBubbleOpen ? " bird-anchor--open" : ""}`}
-                  style={{ left: `${bird.xPercent}%`, top: `${bird.yPercent}%` }}
-                >
-                  <button
-                    type="button"
-                    className={`bird${bird.inWater !== false ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}${isBubbleOpen ? " bird--selected" : ""}`}
-                    style={{
-                      width: `${bird.size}px`,
-                      height: `${bird.size}px`,
-                    }}
-                    onClick={() => openGardenBirdDetail(bird.id)}
-                    aria-label="정원에 둔 조류 보기"
-                    aria-expanded={isBubbleOpen}
-                  >
-                    <span className="bird-sprite">
-                      <Image src="/test.png" alt="" fill sizes="64px" className="bird-sprite-img" />
-                    </span>
-                  </button>
-
-                  {isBubbleOpen ? (
-                    <div
-                      className="bird-speech-bubble"
-                      role="dialog"
-                      aria-label="조류 상세"
-                      style={{ width: `${bubbleSize}px`, minHeight: `${Math.round(bubbleSize * 0.85)}px` }}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {gardenBirdDeleteConfirm ? (
-                        <div className="bird-speech-bubble-inner bird-speech-bubble-inner--confirm">
-                          <p className="bird-speech-confirm-text">삭제하시겠습니까?</p>
-                          <div className="bird-speech-confirm-actions">
-                            <button type="button" className="garden-bird-text-btn" onClick={() => void confirmGardenBirdDelete()}>
-                              네
-                            </button>
-                            <button type="button" className="garden-bird-text-btn" onClick={cancelGardenBirdDelete}>
-                              아니요
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="bird-speech-bubble-inner">
-                          {selectedGardenBirdRecord?.photoUrl ? (
-                            <div className="bird-speech-photo">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={selectedGardenBirdRecord.photoUrl} alt={selectedGardenBirdRecord.name} />
-                            </div>
-                          ) : null}
-                          <button type="button" className="garden-bird-delete-link" onClick={requestGardenBirdDelete}>
-                            삭제하기
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+          <GardenWorldView
+            birds={gardenBirds}
+            records={birdRecords}
+            selectedBirdId={selectedGardenBirdId}
+            deleteConfirm={gardenBirdDeleteConfirm}
+            onBirdClick={openGardenBirdDetail}
+            onRequestDelete={requestGardenBirdDelete}
+            onConfirmDelete={() => void confirmGardenBirdDelete()}
+            onCancelDelete={cancelGardenBirdDelete}
+          />
         </div>
 
-        <button type="button" className="add-bird-button" onClick={openBirdList}>
-          + 오늘의 새 추가하기
-        </button>
+        {!isCalendarOpen && !isArchiveGardenOpen ? (
+          <button type="button" className="add-bird-button" onClick={openBirdList}>
+            + 오늘의 새 추가하기
+          </button>
+        ) : null}
 
         {gardenSyncError && isLoggedIn ? (
           <p className="garden-sync-error" role="alert">
@@ -1930,6 +2009,129 @@ export default function Home() {
               <button type="button" className="bird-confirm-home-btn" onClick={closeRegistrationConfirm}>
                 홈으로 가기
               </button>
+            </div>
+          </div>
+        ) : null}
+
+
+        {isArchiveGardenOpen && archiveViewSnapshot ? (
+          <div className="bird-archive-garden-screen" role="dialog" aria-modal="true" aria-label="이날의 정원">
+            <header className="bird-archive-garden-header">
+              <button type="button" className="bird-archive-garden-back" onClick={closeArchiveGarden} aria-label="캘린더로 돌아가기">
+                <img src="/left.png" alt="" width={48} height={48} decoding="sync" className="bird-archive-garden-back-img" />
+              </button>
+              <h1 className="bird-archive-garden-title">
+                {parseDateKey(selectedCalendarDateKey).month}월 {parseDateKey(selectedCalendarDateKey).day}일의 정원
+              </h1>
+            </header>
+            <div className="garden-scroll bird-archive-garden-scroll" ref={archiveScrollRef}>
+              <GardenWorldView birds={archiveViewSnapshot.birds} records={archiveViewSnapshot.records} readOnly />
+            </div>
+          </div>
+        ) : null}
+
+        {isCalendarOpen ? (
+          <div className="bird-calendar-screen" role="dialog" aria-modal="true" aria-label="캘린더">
+            <header className="bird-calendar-header">
+              <button type="button" className="bird-calendar-close" onClick={closeCalendar} aria-label="캘린더 닫기">
+                <img src="/x.png" alt="" width={48} height={48} decoding="sync" className="bird-calendar-close-img" />
+              </button>
+            </header>
+
+            <div className="bird-calendar-body">
+              <div className="bird-calendar-month-bar">
+                <button
+                  type="button"
+                  className="bird-calendar-month-nav"
+                  onClick={() => setCalendarMonth((prev) => shiftCalendarMonth(prev.year, prev.month, -1))}
+                  aria-label="이전 달"
+                >
+                  ‹
+                </button>
+                <p className="bird-calendar-month-label">{formatMonthLabel(calendarMonth.year, calendarMonth.month)}</p>
+                <button
+                  type="button"
+                  className="bird-calendar-month-nav"
+                  onClick={() => setCalendarMonth((prev) => shiftCalendarMonth(prev.year, prev.month, 1))}
+                  aria-label="다음 달"
+                >
+                  ›
+                </button>
+              </div>
+
+              <div className="bird-calendar-weekdays" aria-hidden>
+                {calendarWeekdays.map((label) => (
+                  <span key={label} className="bird-calendar-weekday">
+                    {label}
+                  </span>
+                ))}
+              </div>
+
+              <div className="bird-calendar-grid">
+                {calendarCells.map((day, index) => {
+                  if (day === null) {
+                    return <span key={`empty-${index}`} className="bird-calendar-day bird-calendar-day--empty" />;
+                  }
+                  const dateKey = toDateKey(calendarMonth.year, calendarMonth.month, day);
+                  const isSelected = dateKey === selectedCalendarDateKey;
+                  const isFuture = dateKey > todayDateKey;
+                  const hasGarden = dateKeyHasGarden(dateKey, dailyArchives, {
+                    birds: gardenBirds,
+                    records: birdRecords,
+                  });
+                  return (
+                    <button
+                      key={dateKey}
+                      type="button"
+                      className={`bird-calendar-day${isSelected ? " bird-calendar-day--selected" : ""}${hasGarden ? " bird-calendar-day--has-garden" : ""}`}
+                      disabled={isFuture}
+                      onClick={() => setSelectedCalendarDateKey(dateKey)}
+                    >
+                      <span className="bird-calendar-day-num">{day}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <hr className="bird-calendar-divider" />
+
+              <div className="bird-calendar-summary">
+                <div className="bird-calendar-stats">
+                  <p className="bird-calendar-stat-row bird-calendar-stat-row--total">
+                    <span className="bird-calendar-stat-label">Total</span>
+                    <span className="bird-calendar-stat-value">{selectedDayStats.total}마리</span>
+                  </p>
+                  {selectedDayStats.bySpecies.map((row) => (
+                    <p key={row.name} className="bird-calendar-stat-row">
+                      <span className="bird-calendar-stat-label">{row.name}</span>
+                      <span className="bird-calendar-stat-value">{row.count}마리</span>
+                    </p>
+                  ))}
+                </div>
+
+                <div className="bird-calendar-preview-col">
+                  <div className="bird-calendar-preview" aria-hidden={selectedDayStats.total === 0}>
+                    {selectedDaySnapshot && selectedDaySnapshot.birds.length > 0 ? (
+                      <GardenWorldView
+                        birds={selectedDaySnapshot.birds}
+                        records={selectedDaySnapshot.records}
+                        readOnly
+                        className="garden-world--mini"
+                      />
+                    ) : (
+                      <span className="bird-calendar-preview-empty">이날의 정원</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="bird-calendar-view-link"
+                    onClick={openArchiveGarden}
+                    disabled={!selectedDaySnapshot || selectedDaySnapshot.birds.length === 0}
+                  >
+                    이날의 정원 보기
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}

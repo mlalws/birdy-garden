@@ -1,8 +1,10 @@
 -- Supabase SQL Editor에서 한 번 실행하세요.
+-- payload JSONB 필드 예: birds, records, dexSeenSpecies, profile,
+-- currentGardenDate (KST YYYY-MM-DD), dailyArchives (날짜별 정원 스냅샷)
 
 create table if not exists public.user_gardens (
   user_id uuid primary key references auth.users (id) on delete cascade,
-  payload jsonb not null default '{"birds":[],"records":[]}'::jsonb,
+  payload jsonb not null default '{"birds":[],"records":[],"dailyArchives":{}}'::jsonb,
   updated_at timestamptz not null default now()
 );
 

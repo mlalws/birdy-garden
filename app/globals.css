@@ -98,15 +98,26 @@ body {
 
 .garden-world {
   position: relative;
-  width: 860px;
+  display: inline-block;
   height: 100%;
   min-height: 0;
   scroll-snap-align: start;
-  background-color: #b7e0f6;
-  background-image: url("/background.jpg");
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
+  vertical-align: top;
+  line-height: 0;
+}
+
+.garden-world-bg {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.garden-world-birds {
+  position: absolute;
+  inset: 0;
 }
 
 .bird-anchor {
@@ -169,6 +180,11 @@ body {
 
 .bird--on-shore .bird-sprite-img {
   object-position: center bottom;
+}
+
+.bird--static {
+  pointer-events: none;
+  cursor: default;
 }
 
 .bird-speech-bubble {
@@ -1993,6 +2009,291 @@ body {
 
 .bird-new-register-submit:active {
   background: linear-gradient(180deg, #eaf6dc 0%, #dff0cc 48%, #d2e9c0 100%);
+}
+
+/* 캘린더 · 일별 정원 */
+.bird-calendar-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #fffefb;
+}
+
+.bird-calendar-header {
+  flex: 0 0 auto;
+  padding: 8px 10px 4px;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+}
+
+.bird-calendar-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bird-calendar-close-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.bird-calendar-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 16px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.bird-calendar-month-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.bird-calendar-month-label {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #2f2f2f;
+}
+
+.bird-calendar-month-nav {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #4a4a4a;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bird-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.bird-calendar-weekday {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8a8a8a;
+}
+
+.bird-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px 2px;
+}
+
+.bird-calendar-day {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bird-calendar-day--empty {
+  pointer-events: none;
+}
+
+.bird-calendar-day:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.bird-calendar-day-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #3a3a3a;
+}
+
+.bird-calendar-day--selected .bird-calendar-day-num {
+  background: #e85c4a;
+  color: #fff;
+  font-weight: 800;
+}
+
+.bird-calendar-day--has-garden:not(.bird-calendar-day--selected) .bird-calendar-day-num {
+  box-shadow: inset 0 0 0 1px rgba(111, 154, 74, 0.55);
+}
+
+.bird-calendar-divider {
+  margin: 14px 0 12px;
+  border: none;
+  border-top: 1px solid rgba(60, 60, 60, 0.2);
+}
+
+.bird-calendar-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.bird-calendar-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bird-calendar-stat-row {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bird-calendar-stat-row--total .bird-calendar-stat-value {
+  font-size: 22px;
+}
+
+.bird-calendar-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8a8a8a;
+}
+
+.bird-calendar-stat-value {
+  font-size: 17px;
+  font-weight: 800;
+  color: #2f2f2f;
+  line-height: 1.2;
+}
+
+.bird-calendar-preview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.bird-calendar-preview {
+  position: relative;
+  height: 92px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #d8d8d8;
+  border: 1px solid rgba(120, 120, 120, 0.35);
+}
+
+.bird-calendar-preview .garden-world--mini {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: auto;
+  pointer-events: none;
+}
+
+.bird-calendar-preview-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a7a7a;
+}
+
+.bird-calendar-view-link {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4a4a4a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.bird-calendar-view-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+  text-decoration: none;
+}
+
+.bird-archive-garden-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #bfe2f5;
+}
+
+.bird-archive-garden-header {
+  flex: 0 0 auto;
+  position: relative;
+  padding: 8px 12px;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  background: rgba(255, 252, 245, 0.92);
+  border-bottom: 1px solid rgba(139, 94, 60, 0.25);
+}
+
+.bird-archive-garden-back {
+  position: absolute;
+  left: 6px;
+  top: calc(6px + env(safe-area-inset-top, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bird-archive-garden-back-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.bird-archive-garden-title {
+  margin: 6px 52px 4px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 800;
+  color: #4a3018;
+}
+
+.bird-archive-garden-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 @media (max-width: 640px) {
