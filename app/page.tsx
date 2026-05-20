@@ -98,12 +98,13 @@ const BIRD_LIST_ITEMS: ListBird[] = LISTED_SPECIES.map((species) => ({
   listBlurb: species.listBlurb,
 }));
 
-const truncateListBlurb = (text: string, maxLen = 80) => {
-  const trimmed = text.trim();
+const shortenCustomListBlurb = (text: string) => {
+  const trimmed = text.trim().replace(/\s+/g, " ");
   if (!trimmed) {
-    return "직접 등록한 조류";
+    return "직접 등록";
   }
-  return trimmed.length <= maxLen ? trimmed : `${trimmed.slice(0, maxLen)}…`;
+  const firstLine = trimmed.split(/[.。!?\n]/)[0]?.trim() ?? trimmed;
+  return firstLine.length <= 34 ? firstLine : firstLine.slice(0, 34).trim();
 };
 
 const DEX_SLOT_COUNT = 15;
@@ -343,7 +344,7 @@ export default function Home() {
         id: custom.id,
         name: custom.name,
         imageSrc: custom.imageSrc,
-        listBlurb: truncateListBlurb(custom.description),
+        listBlurb: shortenCustomListBlurb(custom.description),
         isCustom: true,
       })),
     ],
