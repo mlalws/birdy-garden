@@ -26,15 +26,19 @@ const WATER_SLOTS: Slot[] = [
   { xPercent: 88, yPercent: 86 },
 ];
 
-/** 까치 전용 (잔디/가지) */
+/** 까치 전용 (나무·언덕 위 고정 — 연못 구역과 겹치지 않는 우측 육지 위주) */
 const MAGPIE_SLOTS: Slot[] = [
-  { xPercent: 11, yPercent: 60 },
-  { xPercent: 20, yPercent: 66 },
-  { xPercent: 32, yPercent: 74 },
-  { xPercent: 78, yPercent: 72 },
-  { xPercent: 88, yPercent: 65 },
-  { xPercent: 92, yPercent: 58 },
+  { xPercent: 64, yPercent: 60 },
+  { xPercent: 72, yPercent: 58 },
+  { xPercent: 79, yPercent: 56 },
+  { xPercent: 86, yPercent: 60 },
+  { xPercent: 90, yPercent: 64 },
+  { xPercent: 94, yPercent: 67 },
 ];
+
+/** 잔디(물 밖)인데 y가 이 구간이면 “위쪽 자리”로 보고 연안으로 끌어내리지 않음 (까치 등) */
+const UPPER_SHORE_Y_MIN = 52;
+const UPPER_SHORE_Y_MAX = 70;
 
 /** 화면 위쪽(멀리)일수록 작게, 아래(가까이)일수록 크게 */
 const DEPTH_FAR_Y = 72;
@@ -70,7 +74,7 @@ export function createGardenBirds(
     const yJitter = ((seq + ring) % 3) - 1;
 
     const yPercent = isMagpie
-      ? clamp(base.yPercent + yJitter * 0.45, 56, 79)
+      ? clamp(base.yPercent + yJitter * 0.45, UPPER_SHORE_Y_MIN, UPPER_SHORE_Y_MAX)
       : onShore
         ? clamp(base.yPercent + yJitter * 0.35, 71, 79)
         : clamp(base.yPercent + yJitter * 0.35, 80, 93);
@@ -93,7 +97,14 @@ export function normalizePlacedBird(bird: PlacedBird): PlacedBird {
   let yPercent = bird.yPercent;
 
   if (yPercent < 71) {
-    yPercent = wantsWater ? 84 + (bird.xPercent % 5) : 75;
+    if (wantsWater) {
+      yPercent = 84 + (bird.xPercent % 5);
+    } else if (yPercent >= UPPER_SHORE_Y_MIN) {
+      /** 물 밖 + 위쪽 자리는 그대로 (까치 배치). 그보다 위만 옛날 “하늘” 오리 연안으로 보정 */
+      yPercent = clamp(yPercent, UPPER_SHORE_Y_MIN, UPPER_SHORE_Y_MAX);
+    } else {
+      yPercent = 75;
+    }
   } else if (wantsWater) {
     yPercent = clamp(yPercent, 80, 93);
   } else {

@@ -28,6 +28,8 @@ export type BirdRecord = {
   feature: string;
   photoUrl: string | null;
   count: number;
+  latitude?: number;
+  longitude?: number;
   createdAt: string;
 };
 
@@ -103,6 +105,14 @@ function normalizePayload(raw: unknown): UserGardenPayload {
             feature: typeof rawRecord.feature === "string" ? rawRecord.feature : "",
             photoUrl: typeof rawRecord.photoUrl === "string" ? rawRecord.photoUrl : null,
             count: typeof rawRecord.count === "number" ? rawRecord.count : 1,
+            latitude:
+              typeof rawRecord.latitude === "number" && Number.isFinite(rawRecord.latitude)
+                ? rawRecord.latitude
+                : undefined,
+            longitude:
+              typeof rawRecord.longitude === "number" && Number.isFinite(rawRecord.longitude)
+                ? rawRecord.longitude
+                : undefined,
             createdAt:
               typeof rawRecord.createdAt === "string" ? rawRecord.createdAt : new Date().toISOString(),
           };
