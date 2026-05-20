@@ -27,7 +27,7 @@ import {
 } from "@/lib/profile";
 import { readProfileImageAsDataUrl } from "@/lib/profile-image";
 import { GardenWorldView } from "@/components/garden-world-view";
-import { LocationMap } from "@/components/location-map";
+import { LocationMap, type MapViewerPoint } from "@/components/location-map";
 import { createGardenBirds, normalizePlacedBirds } from "@/lib/garden-birds";
 import {
   applyGardenDayRollover,
@@ -202,6 +202,11 @@ const SPECIES_IMAGE_BY_NAME = new Map(KNOWN_DEX_SPECIES.map((item) => [item.name
 const getSpeciesFallbackImageSrc = (speciesName: string) =>
   SPECIES_IMAGE_BY_NAME.get(speciesName.trim()) ?? DEFAULT_BIRD_IMAGE;
 
+const getRecordMapImageSrc = (record: BirdRecord) => {
+  const species = getRecordSpeciesLabel(record);
+  return record.photoUrl || getSpeciesFallbackImageSrc(species || record.name);
+};
+
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isBirdListOpen, setIsBirdListOpen] = useState(false);
@@ -370,6 +375,28 @@ export default function Home() {
     setSelectedMapRecordId(null);
     setEditingMapRecordId(null);
   }, [mapGroups, selectedMapGroupId]);
+
+  const mapViewerPoints = useMemo<MapViewerPoint[]>(
+    () =>
+      mapGroups.map((group) => {
+        const latest = group.records[0];
+        return {
+          id: group.id,
+          lat: group.lat,
+          lng: group.lng,
+          count: group.totalCount,
+          imageSrc: latest ? getRecordMapImageSrc(latest) : DEFAULT_BIRD_IMAGE,
+          selected: group.id === selectedMapGroupId,
+          entries: group.records.map((record) => ({
+            id: record.id,
+            dateLabel: new Date(record.createdAt).toLocaleDateString("ko-KR"),
+            count: Math.max(1, record.count),
+            speciesName: record.speciesName || record.name,
+          })),
+        };
+      }),
+    [mapGroups, selectedMapGroupId]
+  );
 
   const profileInitial = useMemo(() => {
     const trimmed = profileUsername.trim();
@@ -2325,6 +2352,7 @@ export default function Home() {
                 <div className="bird-map-frame">
                   <LocationMap
                     mode="picker"
+                    theme="warm"
                     center={pickedLocation ?? mapCenter}
                     selectedPoint={pickedLocation}
                     onPick={(point) => setPickedLocation(point)}
@@ -2629,56 +2657,50 @@ export default function Home() {
               <div className="bird-map-screen-map">
                 <LocationMap
                   mode="viewer"
-                  center={selectedMapGroup ? { lat: selectedMapGroup.lat, lng: selectedMapGroup.lng } : mapCenter}
-                  points={mapGroups.map((group) => ({
-                    id: group.id,
-                    lat: group.lat,
-                    lng: group.lng,
-                    label: `${group.totalCount}`,
-                    selected: group.id === selectedMapGroupId,
-                  }))}
+                  theme="warm"
+                  lockView
+                  center={mapCenter}
+                  fitToPoints={mapViewerPoints.length > 0}
+                  points={mapViewerPoints}
                   onSelectPoint={(id) => {
                     setSelectedMapGroupId(id);
                     setSelectedMapRecordId(null);
                     setEditingMapRecordId(null);
                   }}
+                  onSelectEntry={(pointId, entryId) => {
+                    setSelectedMapGroupId(pointId);
+                    setSelectedMapRecordId(entryId);
+                    setEditingMapRecordId(null);
+                  }}
                 />
+                {mapViewerPoints.length === 0 ? (
+                  <p className="bird-map-onmap-empty">발견 위치를 기록하면 지도에 핀이 표시돼요.</p>
+                ) : null}
               </div>
-              {selectedMapGroup ? (
-                <div className="bird-map-records">
-                  <p className="bird-map-records-title">이 위치 기록 ({selectedMapGroup.totalCount}마리)</p>
-                  {selectedMapGroup.records.map((record) => (
-                    <button
-                      key={record.id}
-                      type="button"
-                      className={`bird-map-record-row${selectedMapRecordId === record.id ? " bird-map-record-row--selected" : ""}`}
-                      onClick={() => {
-                        setSelectedMapRecordId(record.id);
-                        setEditingMapRecordId(null);
-                      }}
-                    >
-                      <span>{new Date(record.createdAt).toLocaleDateString("ko-KR")} · {Math.max(1, record.count)}마리</span>
-                      <span>{record.speciesName || record.name}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="bird-map-empty-guide">핀을 누르면 해당 위치의 날짜별 기록이 보여요.</p>
-              )}
 
-              {selectedMapRecord ? (
-                <div className="bird-map-record-actions">
-                  <button type="button" className="bird-map-action-btn" onClick={() => startEditMapRecord(selectedMapRecord)}>
-                    수정하기
-                  </button>
-                  <button type="button" className="bird-map-action-btn bird-map-action-btn--danger" onClick={() => void deleteMapRecord(selectedMapRecord.id)}>
-                    삭제하기
-                  </button>
+              {selectedMapRecord && !editingMapRecordId ? (
+                <div className="bird-map-floating-bar">
+                  <p className="bird-map-floating-label">
+                    {new Date(selectedMapRecord.createdAt).toLocaleDateString("ko-KR")} · {Math.max(1, selectedMapRecord.count)}마리 ·{" "}
+                    {selectedMapRecord.speciesName || selectedMapRecord.name}
+                  </p>
+                  <div className="bird-map-floating-actions">
+                    <button type="button" className="bird-map-action-btn" onClick={() => startEditMapRecord(selectedMapRecord)}>
+                      수정하기
+                    </button>
+                    <button
+                      type="button"
+                      className="bird-map-action-btn bird-map-action-btn--danger"
+                      onClick={() => void deleteMapRecord(selectedMapRecord.id)}
+                    >
+                      삭제하기
+                    </button>
+                  </div>
                 </div>
               ) : null}
 
               {editingMapRecordId ? (
-                <div className="bird-map-edit-box">
+                <div className="bird-map-edit-sheet">
                   <label className="bird-map-edit-label">
                     마리수
                     <input
@@ -2701,12 +2723,13 @@ export default function Home() {
                   <div className="bird-map-frame bird-map-frame--small">
                     <LocationMap
                       mode="picker"
+                      theme="warm"
                       center={mapEditLocation ?? mapCenter}
                       selectedPoint={mapEditLocation}
                       onPick={(point) => setMapEditLocation(point)}
                     />
                   </div>
-                  <div className="bird-map-record-actions">
+                  <div className="bird-map-floating-actions">
                     <button type="button" className="bird-map-action-btn" onClick={() => void saveMapRecordEdit()}>
                       저장
                     </button>
