@@ -50,7 +50,12 @@ import {
   getSpeciesDexInfo,
   KNOWN_DEX_SPECIES,
 } from "@/lib/garden-dex";
-import { LISTED_SPECIES, isCustomListBirdId, speciesUsesSexSplit } from "@/lib/species-catalog";
+import {
+  getListedSpeciesByName,
+  LISTED_SPECIES,
+  isCustomListBirdId,
+  speciesUsesSexSplit,
+} from "@/lib/species-catalog";
 import {
   applyRecordCountChange,
   collectSpeciesLabelsFromGarden,
@@ -254,8 +259,6 @@ export default function Home() {
   const [isDexOpen, setIsDexOpen] = useState(false);
   const [dexDetailSpecies, setDexDetailSpecies] = useState<string | null>(null);
   const [isDexDescPopupOpen, setIsDexDescPopupOpen] = useState(false);
-  const [dexDescOverflows, setDexDescOverflows] = useState(false);
-  const dexDescWrapRef = useRef<HTMLDivElement>(null);
   const [dexMenuRecordId, setDexMenuRecordId] = useState<string | null>(null);
   const [dexEditRecordId, setDexEditRecordId] = useState<string | null>(null);
   const [dexEditCount, setDexEditCount] = useState(1);
@@ -699,25 +702,24 @@ export default function Home() {
     );
   }, [dexDetailInfo?.description, dexDetailSpecies]);
 
-  useLayoutEffect(() => {
+  const dexDetailSummary = useMemo(() => {
     if (!dexDetailSpecies) {
-      setDexDescOverflows(false);
-      return;
+      return "";
     }
-    const el = dexDescWrapRef.current;
-    if (!el) {
-      return;
+    const listed = getListedSpeciesByName(dexDetailSpecies);
+    if (listed?.listBlurb) {
+      return listed.listBlurb;
     }
-
-    const measure = () => {
-      setDexDescOverflows(el.scrollHeight > el.clientHeight + 2);
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
+    const trimmed = dexDetailDescription.trim();
+    if (!trimmed) {
+      return "";
+    }
+    const firstLine = trimmed.split(/[.。!?\n]/)[0]?.trim() ?? trimmed;
+    return firstLine.length <= 34 ? firstLine : firstLine.slice(0, 34);
   }, [dexDetailDescription, dexDetailSpecies]);
+
+  const dexHasLongDescription =
+    dexDetailDescription.trim().length > dexDetailSummary.trim().length + 8;
 
   const loadGardenForUser = async (
     uid: string,
@@ -3211,18 +3213,17 @@ export default function Home() {
                       />
                     </div>
                     <div
-                      ref={dexDescWrapRef}
-                      className={`bird-dex-detail-desc-wrap${dexDescOverflows ? " bird-dex-detail-desc-wrap--overflow" : ""}`}
-                      role={dexDescOverflows ? "button" : undefined}
-                      tabIndex={dexDescOverflows ? 0 : undefined}
-                      aria-label={dexDescOverflows ? "전체 설명 보기" : undefined}
+                      className={`bird-dex-detail-desc-wrap${dexHasLongDescription ? " bird-dex-detail-desc-wrap--expandable" : ""}`}
+                      role={dexHasLongDescription ? "button" : undefined}
+                      tabIndex={dexHasLongDescription ? 0 : undefined}
+                      aria-label={dexHasLongDescription ? "전체 설명 보기" : undefined}
                       onClick={() => {
-                        if (dexDescOverflows) {
+                        if (dexHasLongDescription) {
                           setIsDexDescPopupOpen(true);
                         }
                       }}
                       onKeyDown={(event) => {
-                        if (!dexDescOverflows) {
+                        if (!dexHasLongDescription) {
                           return;
                         }
                         if (event.key === "Enter" || event.key === " ") {
@@ -3231,12 +3232,7 @@ export default function Home() {
                         }
                       }}
                     >
-                      <p className="bird-dex-detail-desc-text">{dexDetailDescription}</p>
-                      {dexDescOverflows ? (
-                        <div className="bird-dex-detail-desc-fade" aria-hidden>
-                          <span className="bird-dex-detail-desc-ellipsis">...</span>
-                        </div>
-                      ) : null}
+                      <p className="bird-dex-detail-desc-text">{dexDetailSummary}</p>
                     </div>
                   </div>
 
