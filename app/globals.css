@@ -942,6 +942,239 @@ select {
   box-shadow: 0 2px 4px rgba(60, 38, 22, 0.18);
 }
 
+.bird-dex-grid .bird-dex-card {
+  width: 100%;
+  cursor: pointer;
+  text-align: center;
+  font: inherit;
+  appearance: none;
+}
+
+.bird-dex-screen--detail {
+  background: #e6e0d6;
+}
+
+.bird-dex-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid rgba(139, 94, 60, 0.2);
+  background: rgba(255, 248, 236, 0.9);
+}
+
+.bird-dex-detail-back {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.bird-dex-detail-back-img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.bird-dex-detail-close-text {
+  border: 0;
+  background: transparent;
+  color: #4a3018;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bird-dex-detail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 14px 24px;
+}
+
+.bird-dex-detail-top {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+.bird-dex-detail-photo {
+  position: relative;
+  width: 130px;
+  height: 110px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fffaf3;
+  border: 1px solid rgba(139, 94, 60, 0.3);
+}
+
+.bird-dex-detail-photo-img {
+  object-fit: contain;
+  padding: 6px;
+}
+
+.bird-dex-detail-desc {
+  margin: 0;
+  padding: 10px 12px;
+  min-height: 110px;
+  border-radius: 10px;
+  background: #fff;
+  color: #4a3018;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.bird-dex-detail-name {
+  margin: 16px 0 12px;
+  text-align: center;
+  color: #3f2615;
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.bird-dex-detail-panel {
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(139, 94, 60, 0.25);
+  padding: 12px 12px 10px;
+  box-shadow: 0 4px 12px rgba(74, 48, 24, 0.08);
+  overflow: visible;
+}
+
+.bird-dex-detail-total {
+  margin: 0 0 10px;
+  color: #4a3018;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.bird-dex-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.bird-dex-detail-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  background: #ece7df;
+}
+
+.bird-dex-detail-row-label {
+  color: #4a3018;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bird-dex-detail-menu-btn {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #5c3d24;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bird-dex-detail-menu-popup {
+  position: absolute;
+  right: 8px;
+  top: calc(100% - 4px);
+  z-index: 5;
+  min-width: 132px;
+  padding: 6px;
+  border-radius: 12px;
+  background: #4a4a4a;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  display: grid;
+  gap: 2px;
+}
+
+.bird-dex-detail-menu-popup button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bird-dex-detail-menu-popup button:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.bird-dex-detail-empty {
+  margin: 0;
+  color: #6f553d;
+  font-size: 13px;
+  text-align: center;
+}
+
+.bird-dex-detail-edit {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 248, 236, 0.95);
+  border: 1px solid rgba(139, 94, 60, 0.3);
+  display: grid;
+  gap: 8px;
+}
+
+.bird-dex-detail-edit-label {
+  display: grid;
+  gap: 6px;
+  color: #4a3018;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bird-dex-detail-edit-input {
+  width: 100%;
+  border: 1px solid #c9a57d;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fffaf3;
+  color: #3f2615;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.bird-dex-detail-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bird-dex-detail-edit-btn {
+  padding: 8px 14px;
+  border: 1px solid rgba(139, 94, 60, 0.4);
+  border-radius: 10px;
+  background: #faf0e4;
+  color: #5c3d24;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .bird-form-screen {
   position: absolute;
   inset: 0;

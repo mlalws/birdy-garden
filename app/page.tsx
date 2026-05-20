@@ -44,6 +44,11 @@ import {
   shiftCalendarMonth,
   toDateKey,
 } from "@/lib/garden-daily";
+import {
+  collectSpeciesSightings,
+  findBirdRecordById,
+  getSpeciesDexInfo,
+} from "@/lib/garden-dex";
 import { gardenPayloadNeedsMigration, migrateGardenPayload } from "@/lib/garden-records";
 import { formatKstWeekLabel, formatKstWeekPeriod, getKstWeekKey } from "@/lib/garden-weekly";
 import { getGardenStorageErrorMessage } from "@/lib/supabase/garden-errors";
@@ -221,6 +226,11 @@ export default function Home() {
   const [birdCount, setBirdCount] = useState(1);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
+  const [dexDetailSpecies, setDexDetailSpecies] = useState<string | null>(null);
+  const [dexMenuRecordId, setDexMenuRecordId] = useState<string | null>(null);
+  const [dexEditRecordId, setDexEditRecordId] = useState<string | null>(null);
+  const [dexEditCount, setDexEditCount] = useState(1);
+  const [dexEditFeature, setDexEditFeature] = useState("");
   const [dexSeenSpecies, setDexSeenSpecies] = useState<string[]>([]);
   const [gardenBirds, setGardenBirds] = useState<PlacedBird[]>([]);
   const [birdRecords, setBirdRecords] = useState<BirdRecord[]>([]);
@@ -610,6 +620,18 @@ export default function Home() {
     () => buildDexDisplayEntries(birdRecords, dexSeenSpecies),
     [birdRecords, dexSeenSpecies]
   );
+
+  const dexDetailInfo = useMemo(
+    () => (dexDetailSpecies ? getSpeciesDexInfo(dexDetailSpecies) : null),
+    [dexDetailSpecies]
+  );
+
+  const dexDetailSightings = useMemo(() => {
+    if (!dexDetailSpecies) {
+      return { total: 0, entries: [] };
+    }
+    return collectSpeciesSightings(dexDetailSpecies, birdRecords, dailyArchives);
+  }, [dexDetailSpecies, birdRecords, dailyArchives]);
 
   const loadGardenForUser = async (
     uid: string,
@@ -1037,8 +1059,146 @@ export default function Home() {
       markGardenDirty();
       setDexSeenSpecies((prev) => [...new Set([...prev, ...unlocked])]);
     }
+    setDexDetailSpecies(null);
+    setDexMenuRecordId(null);
+    setDexEditRecordId(null);
     setIsDexOpen(false);
     setIsMenuOpen(false);
+  };
+
+  const closeDexDetail = () => {
+    setDexDetailSpecies(null);
+    setDexMenuRecordId(null);
+    setDexEditRecordId(null);
+  };
+
+  const openDexDetail = (speciesName: string) => {
+    markGardenDirty();
+    setDexSeenSpecies((prev) => [...new Set([...prev, speciesName])]);
+    setDexDetailSpecies(speciesName);
+    setDexMenuRecordId(null);
+    setDexEditRecordId(null);
+  };
+
+  const openArchiveGardenForDate = (dateKey: string) => {
+    const snapshot = resolveDaySnapshot(dateKey, dailyArchives, { birds: gardenBirds, records: birdRecords });
+    if (!snapshot || snapshot.birds.length === 0) {
+      return;
+    }
+    const { year, month } = parseDateKey(dateKey);
+    setSelectedCalendarDateKey(dateKey);
+    setCalendarMonth({ year, month });
+    setDexMenuRecordId(null);
+    setDexDetailSpecies(null);
+    setDexEditRecordId(null);
+    setIsDexOpen(false);
+    setIsArchiveGardenOpen(true);
+  };
+
+  const startEditDexRecord = (recordId: string) => {
+    const located = findBirdRecordById(recordId, birdRecords, dailyArchives);
+    if (!located) {
+      return;
+    }
+    setDexMenuRecordId(null);
+    setDexEditRecordId(recordId);
+    setDexEditCount(Math.max(1, located.record.count));
+    setDexEditFeature(located.record.feature ?? "");
+  };
+
+  const saveDexRecordEdit = async () => {
+    if (!dexEditRecordId) {
+      return;
+    }
+    const located = findBirdRecordById(dexEditRecordId, birdRecords, dailyArchives);
+    if (!located) {
+      return;
+    }
+
+    const nextCount = Math.max(1, dexEditCount);
+    const nextFeature = dexEditFeature.trim();
+
+    if (!located.inArchive) {
+      const target = located.record;
+      let nextBirds = [...gardenBirds];
+      const existingBirdsForRecord = nextBirds.filter((bird) => bird.recordId === dexEditRecordId);
+      if (nextCount < existingBirdsForRecord.length) {
+        const removeIds = new Set(existingBirdsForRecord.slice(nextCount).map((bird) => bird.id));
+        nextBirds = nextBirds.filter((bird) => !removeIds.has(bird.id));
+      } else if (nextCount > existingBirdsForRecord.length) {
+        const addCount = nextCount - existingBirdsForRecord.length;
+        const added = createGardenBirds(addCount, nextBirds.length, target.id, { listBirdId: target.listBirdId });
+        nextBirds = normalizePlacedBirds([...nextBirds, ...added]);
+      }
+
+      const nextRecords = birdRecords.map((record) =>
+        record.id === dexEditRecordId ? { ...record, count: nextCount, feature: nextFeature } : record
+      );
+      markGardenDirty();
+      setGardenBirds(nextBirds);
+      setBirdRecords(nextRecords);
+      setDexEditRecordId(null);
+
+      if (userId) {
+        try {
+          await persistGarden(userId, {
+            ...buildGardenPayloadFromSnapshot(),
+            birds: nextBirds,
+            records: nextRecords,
+          });
+          if (isSupabaseConfigured()) {
+            await syncWeeklyRankingFromGarden(
+              userId,
+              profileUsername.trim() || "탐험가",
+              nextRecords,
+              dailyArchives
+            );
+          }
+        } catch (error) {
+          reportGardenSyncError(error);
+        }
+      }
+      return;
+    }
+
+    const archive = dailyArchives[located.dateKey];
+    if (!archive) {
+      return;
+    }
+
+    const nextRecords = archive.records.map((record) =>
+      record.id === dexEditRecordId ? { ...record, count: nextCount, feature: nextFeature } : record
+    );
+    let nextBirds = [...archive.birds];
+    const linkedBirds = nextBirds.filter((bird) => bird.recordId === dexEditRecordId);
+    if (nextCount < linkedBirds.length) {
+      const removeIds = new Set(linkedBirds.slice(nextCount).map((bird) => bird.id));
+      nextBirds = nextBirds.filter((bird) => !removeIds.has(bird.id));
+    }
+
+    const nextArchives = {
+      ...dailyArchives,
+      [located.dateKey]: {
+        ...archive,
+        birds: nextBirds,
+        records: nextRecords,
+      },
+    };
+
+    markGardenDirty();
+    setDailyArchives(nextArchives);
+    setDexEditRecordId(null);
+
+    if (userId) {
+      try {
+        await persistGarden(userId, {
+          ...buildGardenPayloadFromSnapshot(),
+          dailyArchives: nextArchives,
+        });
+      } catch (error) {
+        reportGardenSyncError(error);
+      }
+    }
   };
 
   const openCalendar = () => {
@@ -2744,65 +2904,190 @@ export default function Home() {
         ) : null}
 
         {isDexOpen ? (
-          <div className="bird-dex-screen" role="dialog" aria-modal="true" aria-label="조류 도감">
-            <header className="bird-dex-header">
-              <button type="button" className="bird-dex-close" onClick={closeDex} aria-label="도감 닫기">
-                <img
-                  src="/x.png"
-                  alt=""
-                  width={48}
-                  height={48}
-                  decoding="sync"
-                  className="bird-dex-close-img"
-                />
-              </button>
-              <div className="bird-dex-title-plank">
-                <h1 className="bird-dex-title">조류 도감</h1>
-              </div>
-            </header>
+          <div
+            className={`bird-dex-screen${dexDetailSpecies ? " bird-dex-screen--detail" : ""}`}
+            role="dialog"
+            aria-modal="true"
+            aria-label={dexDetailSpecies ? `${dexDetailSpecies} 도감 상세` : "조류 도감"}
+            onClick={() => setDexMenuRecordId(null)}
+          >
+            {dexDetailSpecies ? (
+              <>
+                <header className="bird-dex-detail-header">
+                  <button type="button" className="bird-dex-detail-back" onClick={closeDexDetail} aria-label="도감으로 돌아가기">
+                    <img src="/left.png" alt="" width={40} height={40} decoding="sync" className="bird-dex-detail-back-img" />
+                  </button>
+                  <button type="button" className="bird-dex-detail-close-text" onClick={closeDex}>
+                    닫기
+                  </button>
+                </header>
 
-            <div className="bird-dex-scroll">
-              <div className="bird-dex-grid">
-                {dexDisplayEntries.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className={`bird-dex-card${entry.unlocked ? "" : " bird-dex-card--locked"}`}
-                  >
-                    {entry.unlocked && entry.isNew ? (
-                      <span className="bird-dex-new" aria-label="새로 해금">
-                        New!
-                      </span>
-                    ) : null}
-                    <div className="bird-dex-card-visual">
-                      {entry.unlocked ? (
-                        <div className="bird-dex-unlocked-img-wrap">
-                          {entry.photoUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={entry.photoUrl}
-                              alt={entry.name ?? "조류"}
-                              className="bird-dex-card-img bird-dex-card-img--uploaded"
-                            />
-                          ) : (
-                            <Image
-                              src={entry.imageSrc}
-                              alt={entry.name ?? "조류"}
-                              fill
-                              sizes="120px"
-                              className="bird-dex-card-img"
-                            />
-                          )}
-                        </div>
-                      ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src="/bird-silhouette.svg" alt="" className="bird-dex-silhouette" />
-                      )}
+                <div className="bird-dex-detail-scroll" onClick={(event) => event.stopPropagation()}>
+                  <div className="bird-dex-detail-top">
+                    <div className="bird-dex-detail-photo">
+                      <Image
+                        src={dexDetailInfo?.imageSrc ?? getSpeciesFallbackImageSrc(dexDetailSpecies)}
+                        alt={dexDetailSpecies}
+                        fill
+                        sizes="160px"
+                        className="bird-dex-detail-photo-img"
+                      />
                     </div>
-                    <span className="bird-dex-card-name">{entry.unlocked ? entry.name : "???"}</span>
+                    <p className="bird-dex-detail-desc">
+                      {dexDetailInfo?.description ??
+                        `${dexDetailSpecies}에 대한 설명이 아직 준비되지 않았어요. 발견 기록을 쌓아 도감을 채워 보세요.`}
+                    </p>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  <h2 className="bird-dex-detail-name">{dexDetailSpecies}</h2>
+
+                  <div className="bird-dex-detail-panel">
+                    <p className="bird-dex-detail-total">Total 발견 수: {dexDetailSightings.total}마리</p>
+                    <ul className="bird-dex-detail-list">
+                      {dexDetailSightings.entries.map((entry) => (
+                        <li key={entry.recordId} className="bird-dex-detail-row">
+                          <span className="bird-dex-detail-row-label">
+                            {entry.dateLabel} - {entry.count}마리
+                          </span>
+                          <button
+                            type="button"
+                            className="bird-dex-detail-menu-btn"
+                            aria-label="기록 메뉴"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setDexMenuRecordId((prev) => (prev === entry.recordId ? null : entry.recordId));
+                            }}
+                          >
+                            ⋮
+                          </button>
+                          {dexMenuRecordId === entry.recordId ? (
+                            <div className="bird-dex-detail-menu-popup" role="menu">
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => startEditDexRecord(entry.recordId)}
+                              >
+                                수정하기
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => openArchiveGardenForDate(entry.dateKey)}
+                              >
+                                이날의 정원
+                              </button>
+                            </div>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                    {dexDetailSightings.entries.length === 0 ? (
+                      <p className="bird-dex-detail-empty">아직 이 조류의 발견 기록이 없어요.</p>
+                    ) : null}
+                  </div>
+
+                  {dexEditRecordId ? (
+                    <div className="bird-dex-detail-edit">
+                      <label className="bird-dex-detail-edit-label">
+                        마리수
+                        <input
+                          type="number"
+                          min={1}
+                          className="bird-dex-detail-edit-input"
+                          value={dexEditCount}
+                          onChange={(event) => setDexEditCount(Math.max(1, Number(event.target.value) || 1))}
+                        />
+                      </label>
+                      <label className="bird-dex-detail-edit-label">
+                        메모
+                        <textarea
+                          className="bird-dex-detail-edit-input"
+                          rows={2}
+                          value={dexEditFeature}
+                          onChange={(event) => setDexEditFeature(event.target.value)}
+                        />
+                      </label>
+                      <div className="bird-dex-detail-edit-actions">
+                        <button type="button" className="bird-dex-detail-edit-btn" onClick={() => void saveDexRecordEdit()}>
+                          저장
+                        </button>
+                        <button type="button" className="bird-dex-detail-edit-btn" onClick={() => setDexEditRecordId(null)}>
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <>
+                <header className="bird-dex-header">
+                  <button type="button" className="bird-dex-close" onClick={closeDex} aria-label="도감 닫기">
+                    <img
+                      src="/x.png"
+                      alt=""
+                      width={48}
+                      height={48}
+                      decoding="sync"
+                      className="bird-dex-close-img"
+                    />
+                  </button>
+                  <div className="bird-dex-title-plank">
+                    <h1 className="bird-dex-title">조류 도감</h1>
+                  </div>
+                </header>
+
+                <div className="bird-dex-scroll">
+                  <div className="bird-dex-grid">
+                    {dexDisplayEntries.map((entry) =>
+                      entry.unlocked && entry.name ? (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          className="bird-dex-card"
+                          onClick={() => openDexDetail(entry.name)}
+                        >
+                          {entry.isNew ? (
+                            <span className="bird-dex-new" aria-label="새로 해금">
+                              New!
+                            </span>
+                          ) : null}
+                          <div className="bird-dex-card-visual">
+                            <div className="bird-dex-unlocked-img-wrap">
+                              {entry.photoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={entry.photoUrl}
+                                  alt={entry.name}
+                                  className="bird-dex-card-img bird-dex-card-img--uploaded"
+                                />
+                              ) : (
+                                <Image
+                                  src={entry.imageSrc}
+                                  alt={entry.name}
+                                  fill
+                                  sizes="120px"
+                                  className="bird-dex-card-img"
+                                />
+                              )}
+                            </div>
+                          </div>
+                          <span className="bird-dex-card-name">{entry.name}</span>
+                        </button>
+                      ) : (
+                        <div key={entry.id} className="bird-dex-card bird-dex-card--locked">
+                          <div className="bird-dex-card-visual">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src="/bird-silhouette.svg" alt="" className="bird-dex-silhouette" />
+                          </div>
+                          <span className="bird-dex-card-name">???</span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 
