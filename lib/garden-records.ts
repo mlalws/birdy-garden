@@ -1,3 +1,4 @@
+import { getRecordSpeciesLabel } from "@/lib/garden-daily";
 import type { BirdRecord, DailyGardenArchive, UserGardenPayload } from "@/lib/supabase/garden";
 
 /** 목록에서 고를 수 있는 조류 (placeholder 제외) */
@@ -83,19 +84,72 @@ function migrateArchives(
   return next;
 }
 
+const normalizeDexSpeciesLabel = (name: string): string | null => {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (LEGACY_NICKNAME_TO_LIST[trimmed]) {
+    return LEGACY_NICKNAME_TO_LIST[trimmed].speciesName;
+  }
+  if (trimmed.startsWith("청둥")) {
+    return "청둥오리";
+  }
+  return trimmed;
+};
+
+export function collectSpeciesLabelsFromGarden(
+  records: BirdRecord[],
+  archives: Record<string, DailyGardenArchive> | undefined
+): string[] {
+  const labels = new Set<string>();
+  const addRecord = (record: BirdRecord) => {
+    const label = getRecordSpeciesLabel(migrateBirdRecord(record));
+    if (label) {
+      labels.add(label);
+    }
+  };
+
+  for (const record of records) {
+    addRecord(record);
+  }
+
+  if (archives) {
+    for (const archive of Object.values(archives)) {
+      for (const record of archive.records) {
+        addRecord(record);
+      }
+    }
+  }
+
+  return [...labels];
+}
+
+function migrateDexUnlockedSpecies(
+  unlocked: string[] | undefined,
+  seen: string[] | undefined,
+  records: BirdRecord[],
+  archives: Record<string, DailyGardenArchive> | undefined
+): string[] {
+  const labels = new Set<string>();
+  for (const name of [...(unlocked ?? []), ...(seen ?? [])]) {
+    const normalized = normalizeDexSpeciesLabel(name);
+    if (normalized) {
+      labels.add(normalized);
+    }
+  }
+  for (const label of collectSpeciesLabelsFromGarden(records, archives)) {
+    labels.add(label);
+  }
+  return [...labels];
+}
+
 function migrateDexSeenSpecies(seen: string[] | undefined, records: BirdRecord[]): string[] {
   const labels = new Set<string>();
   for (const name of seen ?? []) {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      continue;
-    }
-    if (LEGACY_NICKNAME_TO_LIST[trimmed]) {
-      labels.add(LEGACY_NICKNAME_TO_LIST[trimmed].speciesName);
-    } else if (trimmed.startsWith("청둥")) {
-      labels.add("청둥오리");
-    } else {
-      labels.add(trimmed);
+    const normalized = normalizeDexSpeciesLabel(name);
+    if (normalized) {
+      labels.add(normalized);
     }
   }
   for (const record of records) {
@@ -109,10 +163,17 @@ function migrateDexSeenSpecies(seen: string[] | undefined, records: BirdRecord[]
 
 export function migrateGardenPayload(payload: UserGardenPayload): UserGardenPayload {
   const records = migrateBirdRecords(payload.records);
+  const dailyArchives = migrateArchives(payload.dailyArchives);
   return {
     ...payload,
     records,
-    dailyArchives: migrateArchives(payload.dailyArchives),
+    dailyArchives,
+    dexUnlockedSpecies: migrateDexUnlockedSpecies(
+      payload.dexUnlockedSpecies,
+      payload.dexSeenSpecies,
+      records,
+      dailyArchives
+    ),
     dexSeenSpecies: migrateDexSeenSpecies(payload.dexSeenSpecies, records),
   };
 }

@@ -42,6 +42,8 @@ export type DailyGardenArchive = {
 export type UserGardenPayload = {
   birds: PlacedBird[];
   records: BirdRecord[];
+  /** 한 번이라도 발견해 도감에 해금된 종 (기록 삭제 후에도 유지) */
+  dexUnlockedSpecies?: string[];
   dexSeenSpecies?: string[];
   profile?: UserProfile;
   /** KST YYYY-MM-DD — 오늘 라이브 정원이 속한 날 */
@@ -50,7 +52,7 @@ export type UserGardenPayload = {
   dailyArchives?: Record<string, DailyGardenArchive>;
 };
 
-const EMPTY_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexSeenSpecies: [] };
+const EMPTY_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexUnlockedSpecies: [], dexSeenSpecies: [] };
 
 function normalizePayload(raw: unknown): UserGardenPayload {
   if (!raw || typeof raw !== "object") {
@@ -119,6 +121,12 @@ function normalizePayload(raw: unknown): UserGardenPayload {
         })
     : [];
 
+  const dexUnlockedSpecies = Array.isArray((obj as { dexUnlockedSpecies?: unknown }).dexUnlockedSpecies)
+    ? (obj as { dexUnlockedSpecies: unknown[] }).dexUnlockedSpecies.filter(
+        (name): name is string => typeof name === "string" && name.trim().length > 0
+      )
+    : [];
+
   const dexSeenSpecies = Array.isArray((obj as { dexSeenSpecies?: unknown }).dexSeenSpecies)
     ? (obj as { dexSeenSpecies: unknown[] }).dexSeenSpecies.filter(
         (name): name is string => typeof name === "string" && name.trim().length > 0
@@ -154,7 +162,7 @@ function normalizePayload(raw: unknown): UserGardenPayload {
     }
   }
 
-  return { birds, records, dexSeenSpecies, profile, currentGardenDate, dailyArchives };
+  return { birds, records, dexUnlockedSpecies, dexSeenSpecies, profile, currentGardenDate, dailyArchives };
 }
 
 export async function loadUserGarden(userId: string): Promise<UserGardenPayload> {
@@ -175,10 +183,8 @@ export function mergeGardenPayload(existing: UserGardenPayload, incoming: UserGa
   return {
     birds: incoming.birds,
     records: incoming.records,
-    dexSeenSpecies:
-      incoming.dexSeenSpecies && incoming.dexSeenSpecies.length > 0
-        ? incoming.dexSeenSpecies
-        : (existing.dexSeenSpecies ?? []),
+    dexUnlockedSpecies: [...new Set([...(existing.dexUnlockedSpecies ?? []), ...(incoming.dexUnlockedSpecies ?? [])])],
+    dexSeenSpecies: [...new Set([...(existing.dexSeenSpecies ?? []), ...(incoming.dexSeenSpecies ?? [])])],
     profile: incoming.profile ?? existing.profile,
     currentGardenDate: incoming.currentGardenDate ?? existing.currentGardenDate ?? undefined,
     dailyArchives: {

@@ -49,7 +49,11 @@ import {
   findBirdRecordById,
   getSpeciesDexInfo,
 } from "@/lib/garden-dex";
-import { gardenPayloadNeedsMigration, migrateGardenPayload } from "@/lib/garden-records";
+import {
+  collectSpeciesLabelsFromGarden,
+  gardenPayloadNeedsMigration,
+  migrateGardenPayload,
+} from "@/lib/garden-records";
 import { formatKstWeekLabel, formatKstWeekPeriod, getKstWeekKey } from "@/lib/garden-weekly";
 import { getGardenStorageErrorMessage } from "@/lib/supabase/garden-errors";
 import {
@@ -119,8 +123,7 @@ type BirdMapGroup = {
   records: BirdRecord[];
 };
 
-const getUnlockedSpeciesNames = (records: BirdRecord[]) =>
-  new Set(records.map((record) => getRecordSpeciesLabel(record)).filter(Boolean));
+const LOCKED_DEX_IMAGE = "/qm.png";
 
 const getSpeciesPhotoFromRecords = (records: BirdRecord[], speciesName: string) => {
   const match = [...records]
@@ -129,9 +132,17 @@ const getSpeciesPhotoFromRecords = (records: BirdRecord[], speciesName: string) 
   return match?.photoUrl ?? null;
 };
 
-const buildDexDisplayEntries = (records: BirdRecord[], dexSeenSpecies: string[]): DexDisplayEntry[] => {
+const buildDexDisplayEntries = (
+  records: BirdRecord[],
+  dailyArchives: Record<string, DailyGardenArchive> | undefined,
+  dexUnlockedSpecies: string[],
+  dexSeenSpecies: string[]
+): DexDisplayEntry[] => {
   const seen = new Set(dexSeenSpecies);
-  const unlockedNames = getUnlockedSpeciesNames(records);
+  const unlockedNames = new Set([
+    ...dexUnlockedSpecies,
+    ...collectSpeciesLabelsFromGarden(records, dailyArchives),
+  ]);
   const knownNames = new Set(KNOWN_DEX_SPECIES.map((species) => species.name));
 
   const entries: DexDisplayEntry[] = KNOWN_DEX_SPECIES.map((species) => {
@@ -161,7 +172,7 @@ const buildDexDisplayEntries = (records: BirdRecord[], dexSeenSpecies: string[])
   while (entries.length < DEX_SLOT_COUNT) {
     entries.push({
       id: `locked-${entries.length}`,
-      imageSrc: DEFAULT_BIRD_IMAGE,
+      imageSrc: LOCKED_DEX_IMAGE,
       unlocked: false,
       isNew: false,
       photoUrl: null,
@@ -173,7 +184,7 @@ const buildDexDisplayEntries = (records: BirdRecord[], dexSeenSpecies: string[])
 
 const GARDEN_STORAGE_KEY = "birdy-garden:birds:v1";
 const DEFAULT_BIRD_IMAGE = "/duck.png";
-const EMPTY_GARDEN_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexSeenSpecies: [] };
+const EMPTY_GARDEN_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexUnlockedSpecies: [], dexSeenSpecies: [] };
 const DEFAULT_MAP_CENTER: BirdPoint = { lat: 37.5665, lng: 126.978 };
 
 type RegistrationConfirmPayload = {
@@ -231,6 +242,7 @@ export default function Home() {
   const [dexEditRecordId, setDexEditRecordId] = useState<string | null>(null);
   const [dexEditCount, setDexEditCount] = useState(1);
   const [dexEditFeature, setDexEditFeature] = useState("");
+  const [dexUnlockedSpecies, setDexUnlockedSpecies] = useState<string[]>([]);
   const [dexSeenSpecies, setDexSeenSpecies] = useState<string[]>([]);
   const [gardenBirds, setGardenBirds] = useState<PlacedBird[]>([]);
   const [birdRecords, setBirdRecords] = useState<BirdRecord[]>([]);
@@ -295,6 +307,7 @@ export default function Home() {
   const gardenSnapshotRef = useRef({
     gardenBirds,
     birdRecords,
+    dexUnlockedSpecies,
     dexSeenSpecies,
     userProfile,
     dailyArchives,
@@ -546,6 +559,7 @@ export default function Home() {
     const migrated = migrateGardenPayload(payload);
     setGardenBirds(normalizePlacedBirds(migrated.birds));
     setBirdRecords(migrated.records);
+    setDexUnlockedSpecies(migrated.dexUnlockedSpecies ?? []);
     setDexSeenSpecies(migrated.dexSeenSpecies ?? []);
     setDailyArchives(migrated.dailyArchives ?? {});
     setCurrentGardenDate(migrated.currentGardenDate ?? getKstDateKey());
@@ -574,16 +588,18 @@ export default function Home() {
     gardenSnapshotRef.current = {
       gardenBirds,
       birdRecords,
+      dexUnlockedSpecies,
       dexSeenSpecies,
       userProfile,
       dailyArchives,
       currentGardenDate,
     };
-  }, [gardenBirds, birdRecords, dexSeenSpecies, userProfile, dailyArchives, currentGardenDate]);
+  }, [gardenBirds, birdRecords, dexUnlockedSpecies, dexSeenSpecies, userProfile, dailyArchives, currentGardenDate]);
 
   const buildGardenPayloadFromSnapshot = (snapshot = gardenSnapshotRef.current): UserGardenPayload => ({
     birds: snapshot.gardenBirds,
     records: snapshot.birdRecords,
+    dexUnlockedSpecies: snapshot.dexUnlockedSpecies,
     dexSeenSpecies: snapshot.dexSeenSpecies,
     currentGardenDate: snapshot.currentGardenDate ?? getKstDateKey(),
     dailyArchives: snapshot.dailyArchives ?? {},
@@ -617,8 +633,8 @@ export default function Home() {
   };
 
   const dexDisplayEntries = useMemo(
-    () => buildDexDisplayEntries(birdRecords, dexSeenSpecies),
-    [birdRecords, dexSeenSpecies]
+    () => buildDexDisplayEntries(birdRecords, dailyArchives, dexUnlockedSpecies, dexSeenSpecies),
+    [birdRecords, dailyArchives, dexUnlockedSpecies, dexSeenSpecies]
   );
 
   const dexDetailInfo = useMemo(
@@ -662,6 +678,7 @@ export default function Home() {
         const merged: UserGardenPayload = {
           birds: sessionGuest.birds,
           records: sessionGuest.records,
+          dexUnlockedSpecies: sessionGuest.dexUnlockedSpecies ?? sessionGuest.dexSeenSpecies ?? [],
           dexSeenSpecies: sessionGuest.dexSeenSpecies ?? [],
           dailyArchives: { ...hydratedPayload.dailyArchives, ...sessionGuest.dailyArchives },
           currentGardenDate: hydratedPayload.currentGardenDate ?? getKstDateKey(),
@@ -879,7 +896,7 @@ export default function Home() {
         clearTimeout(saveGardenTimerRef.current);
       }
     };
-  }, [gardenBirds, birdRecords, dexSeenSpecies, userProfile, isGardenHydrated, isGardenSyncing, userId]);
+  }, [gardenBirds, birdRecords, dexUnlockedSpecies, dexSeenSpecies, userProfile, isGardenHydrated, isGardenSyncing, userId]);
 
   useEffect(() => {
     const onPageHide = () => {
@@ -1054,10 +1071,11 @@ export default function Home() {
   };
 
   const closeDex = () => {
-    const unlocked = [...getUnlockedSpeciesNames(birdRecords)];
-    if (unlocked.length > 0) {
+    const fromGarden = collectSpeciesLabelsFromGarden(birdRecords, dailyArchives);
+    if (fromGarden.length > 0) {
       markGardenDirty();
-      setDexSeenSpecies((prev) => [...new Set([...prev, ...unlocked])]);
+      setDexUnlockedSpecies((prev) => [...new Set([...prev, ...fromGarden])]);
+      setDexSeenSpecies((prev) => [...new Set([...prev, ...fromGarden])]);
     }
     setDexDetailSpecies(null);
     setDexMenuRecordId(null);
@@ -1514,9 +1532,18 @@ export default function Home() {
     const isFirstDiscovery = previousSightings === 0;
     const fallbackImageSrc = getSpeciesFallbackImageSrc(speciesNameForConfirm);
 
+    const speciesLabel = speciesNameForConfirm.trim();
+    const nextUnlocked =
+      speciesLabel.length > 0
+        ? [...new Set([...dexUnlockedSpecies, speciesLabel])]
+        : dexUnlockedSpecies;
+
     markGardenDirty();
     setGardenBirds(nextBirds);
     setBirdRecords(nextRecords);
+    if (speciesLabel.length > 0) {
+      setDexUnlockedSpecies(nextUnlocked);
+    }
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
 
@@ -1553,10 +1580,18 @@ export default function Home() {
             ...buildGardenPayloadFromSnapshot(),
             birds: nextBirds,
             records: nextRecords,
+            dexUnlockedSpecies: nextUnlocked,
           });
         } catch (error) {
           reportGardenSyncError(error);
         }
+      } else {
+        guestSessionPayloadRef.current = {
+          ...buildGardenPayloadFromSnapshot(),
+          birds: nextBirds,
+          records: nextRecords,
+          dexUnlockedSpecies: nextUnlocked,
+        };
       }
     })();
   };
@@ -3078,7 +3113,7 @@ export default function Home() {
                         <div key={entry.id} className="bird-dex-card bird-dex-card--locked">
                           <div className="bird-dex-card-visual">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src="/bird-silhouette.svg" alt="" className="bird-dex-silhouette" />
+                            <Image src={LOCKED_DEX_IMAGE} alt="" fill sizes="120px" className="bird-dex-card-img" />
                           </div>
                           <span className="bird-dex-card-name">???</span>
                         </div>
