@@ -1019,6 +1019,18 @@ export default function Home() {
 
   const registrationUsesSexSplit = speciesUsesSexSplit(selectedListBirdId);
 
+  /** 도감·목록 등 전체 화면이 열리면 홈 정원·추가 버튼·프로필 숨김 */
+  const isHomeChromeHidden =
+    isDexOpen ||
+    isBirdListOpen ||
+    isBirdInfoScreenOpen ||
+    isCalendarOpen ||
+    isArchiveGardenOpen ||
+    isRankingOpen ||
+    isMapOpen ||
+    isLoginOpen ||
+    registrationConfirm !== null;
+
   const captureCurrentLocation = (forcePin = false) => {
     if (typeof window === "undefined" || !navigator.geolocation) {
       return;
@@ -2183,7 +2195,7 @@ export default function Home() {
 
   return (
     <main className="garden-page">
-      <section className="phone-frame">
+      <section className={`phone-frame${isHomeChromeHidden ? " phone-frame--overlay" : ""}`}>
         <div className="bird-chrome-preload" aria-hidden="true">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/x.png" alt="" width={48} height={48} decoding="async" fetchPriority="high" />
@@ -2230,20 +2242,22 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="garden-scroll" ref={scrollRef}>
-          <GardenWorldView
-            birds={gardenBirds}
-            records={birdRecords}
-            selectedBirdId={selectedGardenBirdId}
-            deleteConfirm={gardenBirdDeleteConfirm}
-            onBirdClick={openGardenBirdDetail}
-            onRequestDelete={requestGardenBirdDelete}
-            onConfirmDelete={() => void confirmGardenBirdDelete()}
-            onCancelDelete={cancelGardenBirdDelete}
-          />
-        </div>
+        {!isHomeChromeHidden ? (
+          <div className="garden-scroll" ref={scrollRef}>
+            <GardenWorldView
+              birds={gardenBirds}
+              records={birdRecords}
+              selectedBirdId={selectedGardenBirdId}
+              deleteConfirm={gardenBirdDeleteConfirm}
+              onBirdClick={openGardenBirdDetail}
+              onRequestDelete={requestGardenBirdDelete}
+              onConfirmDelete={() => void confirmGardenBirdDelete()}
+              onCancelDelete={cancelGardenBirdDelete}
+            />
+          </div>
+        ) : null}
 
-        {!isCalendarOpen && !isArchiveGardenOpen && !isRankingOpen && !isMapOpen ? (
+        {!isHomeChromeHidden ? (
           <button type="button" className="add-bird-button" onClick={openBirdList}>
             + 오늘의 새 추가하기
           </button>
@@ -2255,6 +2269,7 @@ export default function Home() {
           </p>
         ) : null}
 
+        {!isHomeChromeHidden ? (
         <div className="profile-corner" ref={profileMenuRef}>
           {!isLoggedIn ? (
             <button type="button" className="floating-login-button" onClick={openLoginScreen}>
@@ -2358,6 +2373,7 @@ export default function Home() {
             </>
           )}
         </div>
+        ) : null}
 
         {isBirdListOpen ? (
           <div className="bird-list-screen" role="dialog" aria-modal="true" aria-label="조류 목록">

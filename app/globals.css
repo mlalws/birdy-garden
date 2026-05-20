@@ -115,6 +115,12 @@ select {
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
 }
 
+.phone-frame--overlay .garden-scroll,
+.phone-frame--overlay .add-bird-button,
+.phone-frame--overlay .profile-corner {
+  display: none !important;
+}
+
 .garden-scroll {
   flex: 1;
   overflow-x: auto;
