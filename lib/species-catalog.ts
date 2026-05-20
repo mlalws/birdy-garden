@@ -30,7 +30,7 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     femaleImageSrc: "/gduck.png",
     femaleWaterImageSrc: "/wgduck.png",
     placement: "waterfowl",
-    listBlurb: "녹색 머리 수컷·연못 흔한 오리",
+    listBlurb: "수컷은 녹색 머리, 연못에서 가장 흔한 오리",
   },
   {
     id: "mandarin_duck",
@@ -40,28 +40,28 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     femaleImageSrc: "/gang.png",
     femaleWaterImageSrc: "/wgang.png",
     placement: "waterfowl",
-    listBlurb: "붉·푸른 화려한 깃",
+    listBlurb: "붉고 푸른 깃이 화려한 대표 물새",
   },
   {
     id: "magpie",
     name: "까치",
     imageSrc: "/kachi.png",
     placement: "land",
-    listBlurb: "검은·흰 깃이 선명해요. 마을·공원에서 울며 영역을 알립니다.",
+    listBlurb: "마을과 공원에서 흔한 검은색과 흰색 텃새",
   },
   {
     id: "sparrow",
     name: "참새",
     imageSrc: "/cham.png",
     placement: "land",
-    listBlurb: "가장 흔한 작은 텃새. 짹짹거리며 사람 가까이 뛰어다녀요.",
+    listBlurb: "사람 가까이에서도 자주 보는 작은 새",
   },
   {
     id: "crow",
     name: "까마귀",
     imageSrc: "/kamak.png",
     placement: "land",
-    listBlurb: "크고 검은 깃의 똑똑한 잡식가. 까까 울며 도시·들에서 자주 봐요.",
+    listBlurb: "도시와 들에서 흔한 크고 검은 새",
   },
   {
     id: "grey_heron",
@@ -69,7 +69,7 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     imageSrc: "/haeyo.png",
     waterImageSrc: "/whaeyo.png",
     placement: "wader",
-    listBlurb: "긴 다리·부리. 연못가에서 가만히 서 있다가 물고기를 낚아채요.",
+    listBlurb: "밤에도 활동하는 야행성 큰 물새",
   },
   {
     id: "egret",
@@ -77,7 +77,7 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     imageSrc: "/baeklo.png",
     waterImageSrc: "/wbaeklo.png",
     placement: "wader",
-    listBlurb: "새하얀 깃과 긴 다리. 물가에서 천천히 걷는 모습이 인상적이에요.",
+    listBlurb: "하얀 깃으로 물가를 걷는 큰 물새",
   },
   {
     id: "cattle_egret",
@@ -85,7 +85,7 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     imageSrc: "/whyga.png",
     waterImageSrc: "/wwhyga.png",
     placement: "wader",
-    listBlurb: "흰 물새·소 옆 벌레 잡이",
+    listBlurb: "논과 들에서 흔한 작은 흰 물새",
   },
 ];
 
