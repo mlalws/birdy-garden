@@ -749,12 +749,8 @@ select {
   margin: 0;
   font-size: 12px;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.35;
   color: #6b4425;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .bird-list-line {
