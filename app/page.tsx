@@ -242,7 +242,6 @@ export default function Home() {
   const [selectedListBirdId, setSelectedListBirdId] = useState<string | null>(null);
   const [isBirdInfoScreenOpen, setIsBirdInfoScreenOpen] = useState(false);
   const [birdRegistrationMode, setBirdRegistrationMode] = useState<"listed" | "unlisted">("listed");
-  const [isPhotoPopupOpen, setIsPhotoPopupOpen] = useState(false);
   const [canOpenPhotoPopup, setCanOpenPhotoPopup] = useState(true);
   const [birdName, setBirdName] = useState("청둥오리");
   const [registrationSpeciesName, setRegistrationSpeciesName] = useState<string | null>(null);
@@ -317,7 +316,6 @@ export default function Home() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasCenteredGardenScrollRef = useRef(false);
   const archiveScrollRef = useRef<HTMLDivElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const saveGardenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
@@ -1003,7 +1001,6 @@ export default function Home() {
   }, [isGardenHydrated, userId, currentGardenDate]);
 
   const resetBirdFormDraft = () => {
-    setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
     setBirdRegistrationMode("listed");
     setBirdName("청둥오리");
@@ -1089,7 +1086,6 @@ export default function Home() {
     }
     setBirdRegistrationMode(mode);
     setIsBirdInfoScreenOpen(true);
-    setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(!opts?.photoUrl);
     setBirdName(nextName);
     setBirdFeature(opts?.feature ?? "");
@@ -1172,12 +1168,10 @@ export default function Home() {
       if (typeof result === "string") {
         setPhotoPreviewUrl(result);
       }
-      setIsPhotoPopupOpen(false);
       setCanOpenPhotoPopup(false);
       event.target.value = "";
     };
     reader.onerror = () => {
-      setIsPhotoPopupOpen(false);
       setCanOpenPhotoPopup(true);
       event.target.value = "";
     };
@@ -1186,24 +1180,20 @@ export default function Home() {
 
   const clearPhotoPreview = () => {
     setPhotoPreviewUrl(null);
-    setIsPhotoPopupOpen(false);
     setCanOpenPhotoPopup(true);
   };
 
-  const togglePhotoPopupFromHit = () => {
-    if (photoPreviewUrl) {
+  const openPhotoPickerFromHit = () => {
+    if (photoPreviewUrl || !canOpenPhotoPopup) {
       return;
     }
-    if (!canOpenPhotoPopup) {
-      return;
-    }
-    setIsPhotoPopupOpen((prev) => !prev);
+    galleryInputRef.current?.click();
   };
 
   const onPhotoHitKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      togglePhotoPopupFromHit();
+      openPhotoPickerFromHit();
     }
   };
 
@@ -2492,16 +2482,6 @@ export default function Home() {
             </header>
 
             <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              aria-hidden
-              tabIndex={-1}
-              onChange={handlePhotoFileChange}
-            />
-            <input
               ref={galleryInputRef}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/*"
@@ -2514,29 +2494,11 @@ export default function Home() {
             <div className="bird-new-register-scroll">
               <div className="bird-new-register-panel">
                 <div className="bird-new-register-photo-box">
-                  {isPhotoPopupOpen && !photoPreviewUrl && canOpenPhotoPopup ? (
-                    <div className="bird-new-register-photo-popup" role="group" aria-label="사진 선택">
-                      <button
-                        type="button"
-                        className="bird-new-register-photo-popup-btn"
-                        onClick={() => cameraInputRef.current?.click()}
-                      >
-                        촬영하기
-                      </button>
-                      <button
-                        type="button"
-                        className="bird-new-register-photo-popup-btn"
-                        onClick={() => galleryInputRef.current?.click()}
-                      >
-                        사진 업로드
-                      </button>
-                    </div>
-                  ) : null}
                   <div
                     className="bird-new-register-photo-hit"
                     role="button"
                     tabIndex={0}
-                    onClick={togglePhotoPopupFromHit}
+                    onClick={openPhotoPickerFromHit}
                     onKeyDown={onPhotoHitKeyDown}
                     aria-label="사진 업로드하기"
                   >
@@ -2619,16 +2581,6 @@ export default function Home() {
             </header>
 
             <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              aria-hidden
-              tabIndex={-1}
-              onChange={handlePhotoFileChange}
-            />
-            <input
               ref={galleryInputRef}
               type="file"
               accept="image/*"
@@ -2642,36 +2594,11 @@ export default function Home() {
               <div className="bird-form-card">
                 <div className="bird-photo-block">
                   <div className="bird-photo-frame">
-                    {isPhotoPopupOpen && !photoPreviewUrl && canOpenPhotoPopup ? (
-                      <div className="bird-photo-popup" role="group" aria-label="사진 선택">
-                        <button
-                          type="button"
-                          className="bird-photo-popup-btn"
-                          onClick={() => cameraInputRef.current?.click()}
-                        >
-                          <span className="bird-photo-popup-ico" aria-hidden>
-                            📷
-                          </span>
-                          촬영하기
-                        </button>
-                        <button
-                          type="button"
-                          className="bird-photo-popup-btn"
-                          onClick={() => galleryInputRef.current?.click()}
-                        >
-                          <span className="bird-photo-popup-ico" aria-hidden>
-                            ☁️
-                          </span>
-                          사진업로드
-                        </button>
-                      </div>
-                    ) : null}
-
                     <div
                       className="bird-photo-hit"
                       role="button"
                       tabIndex={0}
-                      onClick={togglePhotoPopupFromHit}
+                      onClick={openPhotoPickerFromHit}
                       onKeyDown={onPhotoHitKeyDown}
                       aria-label="사진 업로드하기"
                     >
