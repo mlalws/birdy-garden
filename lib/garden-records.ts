@@ -1,12 +1,16 @@
 import type { BirdRecord, DailyGardenArchive, UserGardenPayload } from "@/lib/supabase/garden";
 
 /** 목록에서 고를 수 있는 조류 (placeholder 제외) */
-const LISTED_BIRDS = [{ id: "mallard", name: "청둥오리" }] as const;
+const LISTED_BIRDS = [
+  { id: "mallard", name: "청둥오리" },
+  { id: "magpie", name: "까치" },
+] as const;
 
 const KNOWN_SPECIES_NAMES = new Set(["청둥오리", "까치"]);
 
 const LIST_SPECIES_BY_ID: Record<string, string> = {
   mallard: "청둥오리",
+  magpie: "까치",
 };
 
 /** 예전 빌드에서 저장된 별명 → 목록 종 */

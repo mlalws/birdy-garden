@@ -83,9 +83,6 @@ export async function syncWeeklyRankingFromGarden(
 
   const weekKey = getKstWeekKey();
   const fromGarden = countWeekDiscoveriesFromGarden(liveRecords, archives, weekKey);
-  if (fromGarden <= 0) {
-    return;
-  }
 
   const supabase = getSupabaseBrowserClient();
   const safeNickname = nickname.trim() || "탐험가";
@@ -101,8 +98,22 @@ export async function syncWeeklyRankingFromGarden(
     throw readError;
   }
 
-  const nextCount = Math.max(existing?.discovery_count ?? 0, fromGarden);
-  if (nextCount === existing?.discovery_count) {
+  if (fromGarden <= 0) {
+    if (!existing) {
+      return;
+    }
+    const { error: deleteError } = await supabase
+      .from("weekly_rankings")
+      .delete()
+      .eq("user_id", userId)
+      .eq("week_key", weekKey);
+    if (deleteError) {
+      throw deleteError;
+    }
+    return;
+  }
+
+  if (fromGarden === existing?.discovery_count) {
     return;
   }
 
@@ -110,7 +121,7 @@ export async function syncWeeklyRankingFromGarden(
     {
       user_id: userId,
       week_key: weekKey,
-      discovery_count: nextCount,
+      discovery_count: fromGarden,
       nickname: safeNickname,
       updated_at: new Date().toISOString(),
     },

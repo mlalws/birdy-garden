@@ -77,10 +77,10 @@ type ListBird = {
 
 const BIRD_LIST_ITEMS: ListBird[] = [
   { id: "mallard", name: "청둥오리", imageSrc: "/test.png" },
+  { id: "magpie", name: "까치", imageSrc: "/kachi.png" },
   { id: "ph1", name: "", isPlaceholder: true },
   { id: "ph2", name: "", isPlaceholder: true },
   { id: "ph3", name: "", isPlaceholder: true },
-  { id: "ph4", name: "", isPlaceholder: true },
 ];
 
 const DEX_SLOT_COUNT = 15;
@@ -88,7 +88,7 @@ const DEX_SLOT_COUNT = 15;
 /** 도감에 미리 정의된 조류 (추가해야 해금) */
 const KNOWN_DEX_SPECIES: { id: string; name: string; imageSrc: string }[] = [
   { id: "mallard", name: "청둥오리", imageSrc: "/test.png" },
-  { id: "magpie", name: "까치", imageSrc: "/test.png" },
+  { id: "magpie", name: "까치", imageSrc: "/kachi.png" },
 ];
 
 type DexDisplayEntry = {
@@ -1056,6 +1056,14 @@ export default function Home() {
           birds: nextBirds,
           records: nextRecords,
         });
+        if (isSupabaseConfigured()) {
+          await syncWeeklyRankingFromGarden(
+            userId,
+            profileUsername.trim() || "탐험가",
+            nextRecords,
+            dailyArchives
+          );
+        }
       } catch (error) {
         reportGardenSyncError(error);
       }
