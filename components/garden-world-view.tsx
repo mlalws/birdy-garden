@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { getBirdDisplaySize } from "@/lib/garden-birds";
+import { getBirdDisplaySize, isLandBirdPlacement } from "@/lib/garden-birds";
 import {
   getSpeciesSizeScaleForRecord,
   getSpriteSrcForPlacedBird,
@@ -195,7 +195,8 @@ export function GardenWorldView({
           );
           const bubbleWidth = Math.min(200, Math.max(152, Math.round(displaySize * 2.6)));
           const anchorPos = mapBirdAnchorPosition(bird, isMini ? FULL_BG_LAYOUT : bgLayout);
-          const onLand = record ? recordMustStayOnLand(record) : false;
+          const onLand =
+            (record ? recordMustStayOnLand(record) : false) || isLandBirdPlacement(bird);
 
           return (
             <div

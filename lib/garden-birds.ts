@@ -36,25 +36,25 @@ const WATER_SLOTS: Slot[] = [
   { xPercent: 88, yPercent: 86 },
 ];
 
-/** 나무·잔디 (까치·참새·까마귀) — 배경 기준 잔디선(약 50%) 위, 발 위치 */
+/** 나무·잔디 (까치·참새·까마귀) — 배경 지평선(약 50%) 아래 잔디·언덕 */
 const LAND_SLOTS: Slot[] = [
-  { xPercent: 10, yPercent: 56 },
-  { xPercent: 18, yPercent: 54 },
-  { xPercent: 28, yPercent: 58 },
-  { xPercent: 38, yPercent: 55 },
-  { xPercent: 48, yPercent: 57 },
-  { xPercent: 58, yPercent: 54 },
-  { xPercent: 70, yPercent: 58 },
-  { xPercent: 82, yPercent: 56 },
-  { xPercent: 92, yPercent: 59 },
+  { xPercent: 10, yPercent: 61 },
+  { xPercent: 18, yPercent: 63 },
+  { xPercent: 28, yPercent: 65 },
+  { xPercent: 38, yPercent: 62 },
+  { xPercent: 48, yPercent: 64 },
+  { xPercent: 58, yPercent: 63 },
+  { xPercent: 70, yPercent: 66 },
+  { xPercent: 82, yPercent: 62 },
+  { xPercent: 92, yPercent: 65 },
 ];
 
 /** 배경 이미지 상단 하늘(약 위 50%) — 배치 금지 */
-const SKY_Y_MAX = 49;
+const SKY_Y_MAX = 58;
 
-/** 잔디·나무 발자국 (연못 파란 물 직전) */
-const LAND_Y_MIN = 52;
-const LAND_Y_MAX = 66;
+/** 잔디·나무 발자국 (지평선 아래 초록 잔디) */
+export const LAND_Y_MIN = 60;
+export const LAND_Y_MAX = 70;
 
 /** 연못 물가·물 (y ≥ 71 = 파란 연못 영역) */
 const SHORE_Y_MIN = 71;
@@ -109,11 +109,16 @@ function isWaterZoneY(yPercent: number): boolean {
 }
 
 function clampLandYPercent(bird: Pick<PlacedBird, "xPercent" | "yPercent">): number {
-  if (isLandTreeY(bird.yPercent)) {
+  if (bird.yPercent >= LAND_Y_MIN && bird.yPercent <= LAND_Y_MAX) {
     return bird.yPercent;
   }
   const slot = LAND_SLOTS[Math.floor(bird.xPercent) % LAND_SLOTS.length];
   return clamp(slot.yPercent, LAND_Y_MIN, LAND_Y_MAX);
+}
+
+/** 육지 좌표·비물 영역 — 발 기준 앵커 적용 */
+export function isLandBirdPlacement(bird: Pick<PlacedBird, "yPercent" | "inWater">): boolean {
+  return bird.inWater !== true && bird.yPercent >= LAND_Y_MIN && bird.yPercent <= LAND_Y_MAX;
 }
 
 function clampNearWaterBird(bird: PlacedBird, sizeScale = 1): PlacedBird {
