@@ -877,7 +877,7 @@ export default function Home() {
     setPickedLocation(null);
   };
 
-  const captureCurrentLocation = () => {
+  const captureCurrentLocation = (forcePin = false) => {
     if (typeof window === "undefined" || !navigator.geolocation) {
       return;
     }
@@ -888,7 +888,11 @@ export default function Home() {
           lng: position.coords.longitude,
         };
         setMapCenter(point);
-        setPickedLocation(point);
+        if (forcePin) {
+          setPickedLocation(point);
+        } else {
+          setPickedLocation((prev) => prev ?? point);
+        }
       },
       () => {
         // 권한 거부 시 기본 중심점을 유지
@@ -2327,13 +2331,13 @@ export default function Home() {
                   />
                 </div>
                 <div className="bird-map-actions">
-                  <button type="button" className="bird-map-action-btn" onClick={captureCurrentLocation}>
+                  <button type="button" className="bird-map-action-btn" onClick={() => captureCurrentLocation(true)}>
                     현재 위치로 이동
                   </button>
                   <p className="bird-map-picked-text">
                     {pickedLocation
                       ? `핀 위치: ${pickedLocation.lat.toFixed(5)}, ${pickedLocation.lng.toFixed(5)}`
-                      : "지도를 눌러 발견 위치 핀을 찍어 주세요."}
+                      : "지도를 터치해서 발견 위치 핀을 고정해 주세요."}
                   </p>
                 </div>
               </section>

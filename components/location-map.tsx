@@ -25,6 +25,8 @@ type LocationMapProps = {
   onSelectPoint?: (id: string) => void;
 };
 
+const PICKER_PIN_HTML = `<span class="bird-map-picker-pin" aria-hidden="true"></span>`;
+
 export function LocationMap({
   center,
   zoom = 16,
@@ -38,9 +40,28 @@ export function LocationMap({
   const mapRef = useRef<any>(null);
   const leafletRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
+  const onPickRef = useRef(onPick);
+  const onSelectPointRef = useRef(onSelectPoint);
+  const modeRef = useRef(mode);
+
+  onPickRef.current = onPick;
+  onSelectPointRef.current = onSelectPoint;
+  modeRef.current = mode;
 
   useEffect(() => {
     let mounted = true;
+    let map: any = null;
+
+    const placePin = (lat: number, lng: number) => {
+      if (modeRef.current !== "picker") {
+        return;
+      }
+      onPickRef.current?.({ lat, lng });
+    };
+
+    const handleMapPointer = (event: { latlng: { lat: number; lng: number } }) => {
+      placePin(event.latlng.lat, event.latlng.lng);
+    };
 
     void (async () => {
       if (!rootRef.current || mapRef.current) {
@@ -50,40 +71,48 @@ export function LocationMap({
       if (!mounted || !rootRef.current) {
         return;
       }
+
       leafletRef.current = L;
-      const map = L.map(rootRef.current, {
+      map = L.map(rootRef.current, {
         center: [center.lat, center.lng],
         zoom,
         zoomControl: true,
+        tap: false,
       });
+
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
         attribution: "&copy; OpenStreetMap contributors",
       }).addTo(map);
+
       layerRef.current = L.layerGroup().addTo(map);
-      if (mode === "picker") {
-        map.on("click", (event: any) => {
-          onPick?.({ lat: event.latlng.lat, lng: event.latlng.lng });
-        });
-      }
+      map.on("click", handleMapPointer);
+
       mapRef.current = map;
+      requestAnimationFrame(() => {
+        map?.invalidateSize();
+      });
     })();
 
     return () => {
       mounted = false;
       if (mapRef.current) {
+        mapRef.current.off("click", handleMapPointer);
         mapRef.current.remove();
         mapRef.current = null;
       }
       layerRef.current = null;
     };
-  }, [center.lat, center.lng, mode, onPick, zoom]);
+    // 지도 인스턴스는 마운트 시 1회만 생성
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    if (!mapRef.current) {
+    const map = mapRef.current;
+    if (!map) {
       return;
     }
-    mapRef.current.setView([center.lat, center.lng], mapRef.current.getZoom(), { animate: false });
+    map.setView([center.lat, center.lng], map.getZoom(), { animate: false });
   }, [center.lat, center.lng]);
 
   useEffect(() => {
@@ -93,15 +122,18 @@ export function LocationMap({
     if (!L || !map || !layer) {
       return;
     }
+
     layer.clearLayers();
 
     if (mode === "picker" && selectedPoint) {
-      const marker = L.circleMarker([selectedPoint.lat, selectedPoint.lng], {
-        radius: 8,
-        color: "#b21f2d",
-        fillColor: "#f04657",
-        fillOpacity: 0.85,
-        weight: 2,
+      const marker = L.marker([selectedPoint.lat, selectedPoint.lng], {
+        icon: L.divIcon({
+          className: "bird-map-picker-pin-wrap",
+          html: PICKER_PIN_HTML,
+          iconSize: [34, 46],
+          iconAnchor: [17, 42],
+        }),
+        interactive: false,
       });
       marker.addTo(layer);
       return;
@@ -118,11 +150,11 @@ export function LocationMap({
             popupAnchor: [0, -36],
           }),
         });
-        marker.on("click", () => onSelectPoint?.(point.id));
+        marker.on("click", () => onSelectPointRef.current?.(point.id));
         marker.addTo(layer);
       }
     }
-  }, [mode, onSelectPoint, points, selectedPoint]);
+  }, [mode, points, selectedPoint]);
 
   return <div ref={rootRef} className="bird-map-leaflet" />;
 }

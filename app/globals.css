@@ -1440,6 +1440,31 @@ select {
 .bird-map-leaflet {
   width: 100%;
   height: 100%;
+  touch-action: none;
+  z-index: 0;
+}
+
+.bird-map-leaflet .leaflet-container {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.bird-map-picker-pin-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.bird-map-picker-pin {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #d94b5f;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 10px rgba(77, 18, 28, 0.3);
+  transform: translateY(-2px);
 }
 
 .bird-map-pin-wrap {
