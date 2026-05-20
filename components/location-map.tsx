@@ -31,15 +31,19 @@ type LocationMapProps = {
   theme?: "default" | "warm";
   /** viewer: 지도 중심을 props 변경에 따라 강제 이동하지 않음 */
   lockView?: boolean;
+  /** viewer: 현위치 표시 */
+  userLocation?: LatLng | null;
   selectedPoint?: LatLng | null;
   points?: MapViewerPoint[];
   fitToPoints?: boolean;
   onPick?: (point: LatLng) => void;
   onSelectPoint?: (id: string) => void;
   onSelectEntry?: (pointId: string, entryId: string) => void;
+  onEditPoint?: (pointId: string, entryId?: string) => void;
 };
 
 const PICKER_PIN_HTML = `<span class="bird-map-picker-pin" aria-hidden="true"></span>`;
+const USER_DOT_HTML = `<span class="bird-map-user-dot" aria-hidden="true"></span>`;
 
 const escapeHtml = (value: string) =>
   value
@@ -49,21 +53,20 @@ const escapeHtml = (value: string) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 
-const buildSightPinHtml = (imageSrc: string, count: number, selected: boolean) => {
+const buildSightPinHtml = (imageSrc: string, selected: boolean) => {
   const safeSrc = escapeHtml(imageSrc);
   const selectedClass = selected ? " bird-map-sight-pin--selected" : "";
   return `<div class="bird-map-sight-pin${selectedClass}" aria-hidden="true">
-    <div class="bird-map-sight-pin-badge">
+    <span class="bird-map-sight-pin-head">
       <span class="bird-map-sight-pin-photo">
         <img src="${safeSrc}" alt="" class="bird-map-sight-pin-img" />
       </span>
-      <span class="bird-map-sight-pin-count">${count}</span>
-    </div>
+    </span>
     <span class="bird-map-sight-pin-tip"></span>
   </div>`;
 };
 
-const buildPopupHtml = (entries: MapViewerEntry[]) => {
+const buildPopupHtml = (entries: MapViewerEntry[], totalCount: number) => {
   if (entries.length === 0) {
     return `<div class="bird-map-popup"><p class="bird-map-popup-empty">기록 없음</p></div>`;
   }
@@ -76,7 +79,11 @@ const buildPopupHtml = (entries: MapViewerEntry[]) => {
         </button>`
     )
     .join("");
-  return `<div class="bird-map-popup"><div class="bird-map-popup-list">${rows}</div></div>`;
+  return `<div class="bird-map-popup">
+    <p class="bird-map-popup-summary">이 위치 · 총 ${totalCount}마리 · ${entries.length}회 관찰</p>
+    <div class="bird-map-popup-list">${rows}</div>
+    <button type="button" class="bird-map-popup-edit" data-action="edit-location">위치 수정</button>
+  </div>`;
 };
 
 export function LocationMap({
@@ -85,26 +92,31 @@ export function LocationMap({
   mode,
   theme = "default",
   lockView = false,
+  userLocation = null,
   selectedPoint = null,
   points = [],
   fitToPoints = false,
   onPick,
   onSelectPoint,
   onSelectEntry,
+  onEditPoint,
 }: LocationMapProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const leafletRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
   const hasFittedRef = useRef(false);
+  const lastCenterKeyRef = useRef<string | null>(null);
   const onPickRef = useRef(onPick);
   const onSelectPointRef = useRef(onSelectPoint);
   const onSelectEntryRef = useRef(onSelectEntry);
+  const onEditPointRef = useRef(onEditPoint);
   const modeRef = useRef(mode);
 
   onPickRef.current = onPick;
   onSelectPointRef.current = onSelectPoint;
   onSelectEntryRef.current = onSelectEntry;
+  onEditPointRef.current = onEditPoint;
   modeRef.current = mode;
 
   useEffect(() => {
@@ -139,11 +151,7 @@ export function LocationMap({
         tap: false,
       });
 
-      /* Voyager: 건물(베이지·회색), 공원(연한 초록), 물(연한 파랑) 구분이 뚜렷한 타일 */
-      const tileUrl =
-        theme === "warm"
-          ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+      const tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 
       L.tileLayer(tileUrl, {
         maxZoom: 19,
@@ -156,6 +164,7 @@ export function LocationMap({
       }
 
       mapRef.current = map;
+      lastCenterKeyRef.current = `${center.lat.toFixed(5)},${center.lng.toFixed(5)}`;
       requestAnimationFrame(() => {
         map?.invalidateSize();
       });
@@ -170,17 +179,26 @@ export function LocationMap({
       }
       layerRef.current = null;
       hasFittedRef.current = false;
+      lastCenterKeyRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || lockView) {
+    if (!map) {
       return;
     }
-    map.setView([center.lat, center.lng], map.getZoom(), { animate: false });
-  }, [center.lat, center.lng, lockView]);
+    if (fitToPoints && points.length > 0) {
+      return;
+    }
+    const centerKey = `${center.lat.toFixed(5)},${center.lng.toFixed(5)}`;
+    if (lockView && lastCenterKeyRef.current === centerKey) {
+      return;
+    }
+    map.setView([center.lat, center.lng], map.getZoom() || zoom, { animate: false });
+    lastCenterKeyRef.current = centerKey;
+  }, [center.lat, center.lng, fitToPoints, lockView, points.length, zoom]);
 
   useEffect(() => {
     const L = leafletRef.current;
@@ -207,24 +225,39 @@ export function LocationMap({
     }
 
     if (mode === "viewer") {
+      if (userLocation) {
+        const userMarker = L.marker([userLocation.lat, userLocation.lng], {
+          icon: L.divIcon({
+            className: "bird-map-user-dot-wrap",
+            html: USER_DOT_HTML,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+          }),
+          interactive: false,
+          zIndexOffset: 400,
+        });
+        userMarker.addTo(layer);
+      }
+
       for (const point of points) {
         const marker = L.marker([point.lat, point.lng], {
           icon: L.divIcon({
             className: "bird-map-sight-pin-wrap",
-            html: buildSightPinHtml(point.imageSrc, point.count, !!point.selected),
-            iconSize: [58, 82],
-            iconAnchor: [29, 82],
+            html: buildSightPinHtml(point.imageSrc, !!point.selected),
+            iconSize: [52, 72],
+            iconAnchor: [26, 72],
           }),
         });
 
-        marker.bindPopup(buildPopupHtml(point.entries), {
+        marker.bindPopup(buildPopupHtml(point.entries, point.count), {
           className: "bird-map-leaflet-popup",
           closeButton: true,
-          maxWidth: 240,
+          maxWidth: 260,
         });
 
         marker.on("click", () => {
           onSelectPointRef.current?.(point.id);
+          marker.openPopup();
         });
 
         marker.on("popupopen", () => {
@@ -243,22 +276,35 @@ export function LocationMap({
               }
             };
           });
+          const editBtn = popupEl.querySelector<HTMLButtonElement>('[data-action="edit-location"]');
+          if (editBtn) {
+            editBtn.onclick = (event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const firstEntryId = point.entries[0]?.id;
+              onEditPointRef.current?.(point.id, firstEntryId);
+            };
+          }
         });
 
         marker.addTo(layer);
       }
 
       if (fitToPoints && points.length > 0 && !hasFittedRef.current) {
-        if (points.length === 1) {
-          map.setView([points[0].lat, points[0].lng], 15, { animate: false });
+        const latLngs: [number, number][] = points.map((point) => [point.lat, point.lng]);
+        if (userLocation) {
+          latLngs.push([userLocation.lat, userLocation.lng]);
+        }
+        if (latLngs.length === 1) {
+          map.setView(latLngs[0], 15, { animate: false });
         } else {
-          const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng]));
-          map.fitBounds(bounds.pad(0.2), { animate: false });
+          const bounds = L.latLngBounds(latLngs);
+          map.fitBounds(bounds.pad(0.22), { animate: false });
         }
         hasFittedRef.current = true;
       }
     }
-  }, [fitToPoints, mode, points, selectedPoint]);
+  }, [fitToPoints, mode, points, selectedPoint, userLocation?.lat, userLocation?.lng]);
 
   const themeClass = theme === "warm" ? " bird-map-leaflet--warm" : "";
 

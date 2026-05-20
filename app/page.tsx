@@ -50,7 +50,11 @@ import {
   getSpeciesDexInfo,
   KNOWN_DEX_SPECIES,
 } from "@/lib/garden-dex";
-import { LISTED_SPECIES, isCustomListBirdId, speciesUsesSexSplit } from "@/lib/species-catalog";
+import {
+  getListedSpeciesByRecord,
+  isCustomListBirdId,
+  speciesUsesSexSplit,
+} from "@/lib/species-catalog";
 import {
   applyRecordCountChange,
   collectSpeciesLabelsFromGarden,
@@ -233,8 +237,35 @@ const getSpeciesFallbackImageSrc = (speciesName: string) =>
   SPECIES_IMAGE_BY_NAME.get(speciesName.trim()) ?? DEFAULT_BIRD_IMAGE;
 
 const getRecordMapImageSrc = (record: BirdRecord) => {
+  if (isCustomListBirdId(record.listBirdId) && record.photoUrl) {
+    return record.photoUrl;
+  }
+  const listed = getListedSpeciesByRecord(record);
+  if (listed) {
+    return listed.imageSrc;
+  }
   const species = getRecordSpeciesLabel(record);
-  return record.photoUrl || getSpeciesFallbackImageSrc(species || record.name);
+  return getSpeciesFallbackImageSrc(species || record.name);
+};
+
+const collectAllMapRecords = (
+  records: BirdRecord[],
+  archives: Record<string, DailyGardenArchive> | undefined
+): BirdRecord[] => {
+  const byId = new Map<string, BirdRecord>();
+  for (const record of records) {
+    byId.set(record.id, record);
+  }
+  if (archives) {
+    for (const archive of Object.values(archives)) {
+      for (const record of archive.records) {
+        if (!byId.has(record.id)) {
+          byId.set(record.id, record);
+        }
+      }
+    }
+  }
+  return [...byId.values()];
 };
 
 export default function Home() {
@@ -401,9 +432,14 @@ export default function Home() {
     return birdRecords.find((record) => record.id === selectedGardenBird.recordId) ?? null;
   }, [birdRecords, selectedGardenBird]);
 
+  const allMapRecords = useMemo(
+    () => collectAllMapRecords(birdRecords, dailyArchives),
+    [birdRecords, dailyArchives]
+  );
+
   const mapGroups = useMemo<BirdMapGroup[]>(() => {
     const grouped = new Map<string, BirdMapGroup>();
-    for (const record of birdRecords) {
+    for (const record of allMapRecords) {
       if (typeof record.latitude !== "number" || typeof record.longitude !== "number") {
         continue;
       }
@@ -426,7 +462,7 @@ export default function Home() {
       ...group,
       records: [...group.records].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     }));
-  }, [birdRecords]);
+  }, [allMapRecords]);
 
   const selectedMapGroup = useMemo(
     () => mapGroups.find((group) => group.id === selectedMapGroupId) ?? null,
@@ -459,7 +495,13 @@ export default function Home() {
           selected: group.id === selectedMapGroupId,
           entries: group.records.map((record) => ({
             id: record.id,
-            dateLabel: new Date(record.createdAt).toLocaleDateString("ko-KR"),
+            dateLabel: new Date(record.createdAt).toLocaleString("ko-KR", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
             count: Math.max(1, record.count),
             speciesName: record.speciesName || record.name,
           })),
@@ -1602,6 +1644,21 @@ export default function Home() {
     }
   };
 
+  const handleEditMapPoint = (pointId: string, entryId?: string) => {
+    const group = mapGroups.find((item) => item.id === pointId);
+    if (!group) {
+      return;
+    }
+    const record =
+      (entryId ? group.records.find((item) => item.id === entryId) : null) ?? group.records[0] ?? null;
+    if (!record) {
+      return;
+    }
+    setSelectedMapGroupId(pointId);
+    setSelectedMapRecordId(record.id);
+    startEditMapRecord(record);
+  };
+
   const startEditMapRecord = (record: BirdRecord) => {
     setEditingMapRecordId(record.id);
     setMapEditCount(Math.max(1, record.count));
@@ -1712,8 +1769,8 @@ export default function Home() {
       photoUrl: capturedPhoto,
       count: amount,
       ...(usesSexSplit ? { maleCount, femaleCount } : {}),
-      latitude: pickedLocation?.lat,
-      longitude: pickedLocation?.lng,
+      latitude: pickedLocation?.lat ?? mapCenter.lat,
+      longitude: pickedLocation?.lng ?? mapCenter.lng,
       createdAt: new Date().toISOString(),
     };
     const nextRecords = [...birdRecords, newRecord];
@@ -3050,9 +3107,8 @@ export default function Home() {
                 <LocationMap
                   mode="viewer"
                   theme="warm"
-                  lockView
                   center={mapCenter}
-                  fitToPoints={mapViewerPoints.length > 0}
+                  userLocation={mapCenter}
                   points={mapViewerPoints}
                   onSelectPoint={(id) => {
                     setSelectedMapGroupId(id);
@@ -3064,6 +3120,7 @@ export default function Home() {
                     setSelectedMapRecordId(entryId);
                     setEditingMapRecordId(null);
                   }}
+                  onEditPoint={handleEditMapPoint}
                 />
                 {mapViewerPoints.length === 0 ? (
                   <p className="bird-map-onmap-empty">발견 위치를 기록하면 지도에 핀이 표시돼요.</p>
@@ -3078,7 +3135,7 @@ export default function Home() {
                   </p>
                   <div className="bird-map-floating-actions">
                     <button type="button" className="bird-map-action-btn" onClick={() => startEditMapRecord(selectedMapRecord)}>
-                      수정하기
+                      위치·기록 수정
                     </button>
                     <button
                       type="button"
@@ -3093,6 +3150,7 @@ export default function Home() {
 
               {editingMapRecordId ? (
                 <div className="bird-map-edit-sheet">
+                  <p className="bird-map-floating-label">위치를 지도에서 다시 찍어 저장할 수 있어요.</p>
                   <label className="bird-map-edit-label">
                     마리수
                     <input
