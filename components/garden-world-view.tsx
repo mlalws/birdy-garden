@@ -100,7 +100,7 @@ export function GardenWorldView({
         {birds.map((bird) => {
           const isBubbleOpen = !readOnly && selectedBird?.id === bird.id;
           const displaySize = Math.max(8, Math.round(getBirdDisplaySize(bird) * birdSizeScale));
-          const bubbleSize = Math.round(displaySize * 1.8);
+          const bubbleWidth = Math.min(200, Math.max(152, Math.round(displaySize * 2.6)));
 
           return (
             <div
@@ -138,7 +138,7 @@ export function GardenWorldView({
                   className="bird-speech-bubble"
                   role="dialog"
                   aria-label="조류 상세"
-                  style={{ width: `${bubbleSize}px`, minHeight: `${Math.round(bubbleSize * 0.85)}px` }}
+                  style={{ width: `${bubbleWidth}px` }}
                   onClick={(event) => event.stopPropagation()}
                 >
                   {deleteConfirm ? (

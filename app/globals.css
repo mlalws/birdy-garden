@@ -228,7 +228,11 @@ select {
   transform: translateX(-50%);
   z-index: 2;
   box-sizing: border-box;
-  padding: 8px 8px 10px;
+  width: auto;
+  min-width: 152px;
+  max-width: min(200px, 46vw);
+  height: auto;
+  padding: 10px 10px 12px;
   border-radius: 12px;
   border: 2px solid #8b5c3a;
   background: linear-gradient(165deg, #fffaf4 0%, #f5e8d6 55%, #edd9c0 100%);
@@ -280,21 +284,22 @@ select {
 .bird-speech-bubble-inner {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  align-items: stretch;
+  gap: 8px;
   width: 100%;
-  min-height: 0;
 }
 
 .bird-speech-bubble-inner--confirm {
+  align-items: center;
   justify-content: center;
-  padding: 4px 2px;
+  padding: 2px 4px 0;
+  gap: 10px;
 }
 
 .bird-speech-photo {
   width: 100%;
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
+  max-height: 112px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(139, 94, 60, 0.28);
@@ -304,36 +309,42 @@ select {
 .bird-speech-photo img {
   display: block;
   width: 100%;
-  max-height: 100%;
+  max-height: 112px;
   object-fit: contain;
 }
 
 .bird-speech-confirm-text {
   margin: 0;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   color: #4a3018;
   text-align: center;
-  line-height: 1.35;
+  line-height: 1.5;
+  word-break: keep-all;
 }
 
 .bird-speech-confirm-actions {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   justify-content: center;
+  width: 100%;
 }
 
 .garden-bird-delete-link {
   margin: 0;
-  padding: 0;
+  padding: 4px 0 2px;
   border: none;
   background: transparent;
   color: #8b5c3a;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .garden-bird-delete-confirm {
@@ -360,15 +371,18 @@ select {
 }
 
 .garden-bird-text-btn {
-  padding: 0;
+  padding: 2px 4px;
   border: none;
   background: transparent;
   color: #6b4426;
   font-size: 14px;
   font-weight: 800;
+  line-height: 1.4;
+  white-space: nowrap;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .menu-drawer {
@@ -1803,6 +1817,213 @@ select {
 .bird-confirm-home-btn:active {
   opacity: 0.94;
   transform: translateY(1px);
+}
+
+.bird-confirm-rank-banner {
+  margin: 0;
+  width: min(100%, 320px);
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: linear-gradient(165deg, #fff4d6 0%, #ffe8a8 45%, #ffd978 100%);
+  border: 2px solid rgba(201, 145, 40, 0.75);
+  color: #5c3d12;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 8px 20px rgba(201, 145, 40, 0.22);
+  animation: bird-confirm-rank-pop 0.45s ease-out;
+}
+
+@keyframes bird-confirm-rank-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 주간 랭킹 */
+.bird-ranking-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: linear-gradient(180deg, #fff9f0 0%, #f6ebdc 100%);
+}
+
+.bird-ranking-header {
+  flex: 0 0 auto;
+  position: relative;
+  padding: 8px 12px 10px;
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid rgba(139, 94, 60, 0.2);
+  background: rgba(255, 252, 245, 0.95);
+}
+
+.bird-ranking-close {
+  position: absolute;
+  left: 6px;
+  top: calc(6px + env(safe-area-inset-top, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bird-ranking-close-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.bird-ranking-title-wrap {
+  margin: 4px 52px 0;
+  text-align: center;
+}
+
+.bird-ranking-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 900;
+  color: #4a3018;
+}
+
+.bird-ranking-subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a5a3a;
+}
+
+.bird-ranking-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.bird-ranking-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #6b4f35;
+  text-align: center;
+}
+
+.bird-ranking-guest {
+  margin-top: 8px;
+  padding: 20px 16px;
+  border-radius: 14px;
+  background: rgba(255, 252, 245, 0.9);
+  border: 1px dashed rgba(139, 94, 60, 0.35);
+  text-align: center;
+}
+
+.bird-ranking-guest p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: #4a3018;
+}
+
+.bird-ranking-login-btn {
+  padding: 12px 20px;
+  border: 1px solid rgba(90, 58, 32, 0.45);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #9a6842 0%, #7a4f31 100%);
+  color: #fff9f4;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.bird-ranking-status {
+  margin: 12px 0;
+  text-align: center;
+  font-size: 14px;
+  color: #6b4f35;
+}
+
+.bird-ranking-status--error {
+  color: #8b3a28;
+}
+
+.bird-ranking-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bird-ranking-item {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 252, 245, 0.92);
+  border: 1px solid rgba(201, 165, 125, 0.5);
+}
+
+.bird-ranking-item--me {
+  border-color: rgba(154, 104, 66, 0.85);
+  background: linear-gradient(165deg, #faf0e4 0%, #f2e2cf 100%);
+  box-shadow: 0 4px 12px rgba(86, 56, 34, 0.12);
+}
+
+.bird-ranking-rank {
+  font-size: 18px;
+  font-weight: 900;
+  text-align: center;
+  color: #6b4426;
+}
+
+.bird-ranking-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: #4a3018;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bird-ranking-score {
+  font-size: 13px;
+  font-weight: 800;
+  color: #7a5a3a;
+}
+
+.bird-ranking-my-rank {
+  margin: auto 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(198, 232, 151, 0.35);
+  border: 1px solid rgba(120, 160, 80, 0.45);
+  text-align: center;
+  font-size: 14px;
+  color: #3f4a28;
+}
+
+.bird-ranking-my-rank strong {
+  font-weight: 900;
+  color: #2f3a1c;
 }
 
 /* 신규 조류 등록 (리스트에 없는 조류) */

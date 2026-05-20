@@ -29,8 +29,8 @@ const WATER_SLOTS: Slot[] = [
 /** 화면 위쪽(멀리)일수록 작게, 아래(가까이)일수록 크게 */
 const DEPTH_FAR_Y = 58;
 const DEPTH_NEAR_Y = 84;
-const SIZE_FAR = 22;
-const SIZE_NEAR = 36;
+const SIZE_FAR = 30;
+const SIZE_NEAR = 48;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 

@@ -42,7 +42,15 @@ import {
   toDateKey,
 } from "@/lib/garden-daily";
 import { gardenPayloadNeedsMigration, migrateGardenPayload } from "@/lib/garden-records";
+import { formatKstWeekLabel, formatKstWeekPeriod, getKstWeekKey } from "@/lib/garden-weekly";
 import { getGardenStorageErrorMessage } from "@/lib/supabase/garden-errors";
+import {
+  fetchWeeklyLeaderboard,
+  rankFromSortedRows,
+  recordWeeklyDiscovery,
+  weeklyRankBannerMessage,
+  type WeeklyRankingRow,
+} from "@/lib/supabase/ranking";
 import {
   loadUserGarden,
   saveUserGarden,
@@ -150,6 +158,8 @@ type RegistrationConfirmPayload = {
   speciesName: string;
   photoUrl: string | null;
   totalSightings: number;
+  /** 이번 주 1위 등극·갱신 시 짹짹짹 화면 하단 배너 */
+  weeklyRankBanner?: string | null;
 };
 
 const countSpeciesSightings = (records: BirdRecord[], speciesName: string) => {
@@ -228,6 +238,10 @@ export default function Home() {
     return { year: today.year, month: today.month };
   });
   const [selectedCalendarDateKey, setSelectedCalendarDateKey] = useState(() => getKstDateKey());
+  const [isRankingOpen, setIsRankingOpen] = useState(false);
+  const [weeklyLeaderboard, setWeeklyLeaderboard] = useState<WeeklyRankingRow[]>([]);
+  const [isRankingLoading, setIsRankingLoading] = useState(false);
+  const [rankingError, setRankingError] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasCenteredGardenScrollRef = useRef(false);
@@ -684,6 +698,27 @@ export default function Home() {
     warm("/background.jpg");
   }, []);
 
+  const currentWeekKey = getKstWeekKey();
+
+  const myWeeklyRank = useMemo(() => {
+    if (!userId) {
+      return null;
+    }
+    return rankFromSortedRows(weeklyLeaderboard, userId);
+  }, [weeklyLeaderboard, userId]);
+
+  const myWeeklyEntry = useMemo(
+    () => weeklyLeaderboard.find((row) => row.user_id === userId) ?? null,
+    [weeklyLeaderboard, userId]
+  );
+
+  useEffect(() => {
+    if (!isRankingOpen) {
+      return;
+    }
+    void loadWeeklyRanking();
+  }, [isRankingOpen, isLoggedIn]);
+
   const flushGardenSaveNow = async (uid: string) => {
     if (!gardenDirtyRef.current) {
       return;
@@ -883,6 +918,36 @@ export default function Home() {
     setIsMenuOpen(false);
   };
 
+  const openRanking = () => {
+    setIsRankingOpen(true);
+    setIsMenuOpen(false);
+  };
+
+  const closeRanking = () => {
+    setIsRankingOpen(false);
+    setIsMenuOpen(false);
+  };
+
+  const loadWeeklyRanking = async () => {
+    if (!isLoggedIn || !isSupabaseConfigured()) {
+      setWeeklyLeaderboard([]);
+      setRankingError("");
+      return;
+    }
+
+    setIsRankingLoading(true);
+    setRankingError("");
+    try {
+      const rows = await fetchWeeklyLeaderboard(getKstWeekKey());
+      setWeeklyLeaderboard(rows);
+    } catch (error) {
+      setWeeklyLeaderboard([]);
+      setRankingError(getGardenStorageErrorMessage(error));
+    } finally {
+      setIsRankingLoading(false);
+    }
+  };
+
   const openArchiveGarden = () => {
     if (!selectedDaySnapshot || selectedDaySnapshot.birds.length === 0) {
       return;
@@ -903,6 +968,9 @@ export default function Home() {
     }
     if (label === "캘린더") {
       openCalendar();
+    }
+    if (label === "랭킹") {
+      openRanking();
     }
   };
 
@@ -1022,10 +1090,23 @@ export default function Home() {
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
 
+    let weeklyRankBanner: string | null = null;
+    if (userId && isSupabaseConfigured()) {
+      try {
+        const rankingResult = await recordWeeklyDiscovery(userId, profileUsername.trim() || "탐험가", amount);
+        if (rankingResult) {
+          weeklyRankBanner = weeklyRankBannerMessage(rankingResult);
+        }
+      } catch {
+        // 랭킹 실패해도 등록·짹짹짹 화면은 진행
+      }
+    }
+
     setRegistrationConfirm({
       speciesName: speciesNameForConfirm,
       photoUrl: capturedPhoto,
       totalSightings,
+      weeklyRankBanner,
     });
 
     if (userId) {
@@ -1504,7 +1585,7 @@ export default function Home() {
           />
         </div>
 
-        {!isCalendarOpen && !isArchiveGardenOpen ? (
+        {!isCalendarOpen && !isArchiveGardenOpen && !isRankingOpen ? (
           <button type="button" className="add-bird-button" onClick={openBirdList}>
             + 오늘의 새 추가하기
           </button>
@@ -2056,6 +2137,12 @@ export default function Home() {
                 발견하셨네요!
               </p>
 
+              {registrationConfirm.weeklyRankBanner ? (
+                <p className="bird-confirm-rank-banner" role="status">
+                  {registrationConfirm.weeklyRankBanner}
+                </p>
+              ) : null}
+
               <button type="button" className="bird-confirm-home-btn" onClick={closeRegistrationConfirm}>
                 홈으로 가기
               </button>
@@ -2182,6 +2269,71 @@ export default function Home() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {isRankingOpen ? (
+          <div className="bird-ranking-screen" role="dialog" aria-modal="true" aria-label="주간 랭킹">
+            <header className="bird-ranking-header">
+              <button type="button" className="bird-ranking-close" onClick={closeRanking} aria-label="랭킹 닫기">
+                <img src="/x.png" alt="" width={48} height={48} decoding="sync" className="bird-ranking-close-img" />
+              </button>
+              <div className="bird-ranking-title-wrap">
+                <h1 className="bird-ranking-title">주간 랭킹</h1>
+                <p className="bird-ranking-subtitle">
+                  {formatKstWeekLabel(currentWeekKey)}
+                  {formatKstWeekPeriod(currentWeekKey) ? ` · ${formatKstWeekPeriod(currentWeekKey)}` : ""}
+                </p>
+              </div>
+            </header>
+
+            <div className="bird-ranking-body">
+              <p className="bird-ranking-desc">이번 주 가장 많이 조류를 발견한 순위예요. 매주 월요일에 새로 시작돼요.</p>
+
+              {!isLoggedIn ? (
+                <div className="bird-ranking-guest">
+                  <p>로그인하면 주간 랭킹에 참여할 수 있어요.</p>
+                  <button type="button" className="bird-ranking-login-btn" onClick={openLoginScreen}>
+                    로그인하기
+                  </button>
+                </div>
+              ) : isRankingLoading ? (
+                <p className="bird-ranking-status">불러오는 중…</p>
+              ) : rankingError ? (
+                <p className="bird-ranking-status bird-ranking-status--error" role="alert">
+                  {rankingError}
+                </p>
+              ) : weeklyLeaderboard.length === 0 ? (
+                <p className="bird-ranking-status">아직 이번 주 기록이 없어요. 첫 발견의 주인공이 되어 보세요!</p>
+              ) : (
+                <ol className="bird-ranking-list">
+                  {weeklyLeaderboard.map((row, index) => {
+                    const rank = index + 1;
+                    const isMe = row.user_id === userId;
+                    const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
+                    return (
+                      <li
+                        key={row.user_id}
+                        className={`bird-ranking-item${isMe ? " bird-ranking-item--me" : ""}`}
+                      >
+                        <span className="bird-ranking-rank" aria-hidden>
+                          {medal ?? rank}
+                        </span>
+                        <span className="bird-ranking-name">{row.nickname || "탐험가"}</span>
+                        <span className="bird-ranking-score">{row.discovery_count}마리</span>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+
+              {isLoggedIn && myWeeklyRank !== null ? (
+                <p className="bird-ranking-my-rank">
+                  내 순위: <strong>{myWeeklyRank}위</strong>
+                  {myWeeklyEntry ? ` · ${myWeeklyEntry.discovery_count}마리` : ""}
+                </p>
+              ) : null}
             </div>
           </div>
         ) : null}
