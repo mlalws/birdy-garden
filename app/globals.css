@@ -896,6 +896,14 @@ select {
   background: linear-gradient(180deg, #faf5ee 0%, #ebe2d6 100%);
 }
 
+/* 미해금 ??? 아이콘 (qm.png) */
+.bird-dex-card--locked .bird-dex-card-visual > span {
+  inset: 10% !important;
+  width: 80% !important;
+  height: 80% !important;
+  margin: auto !important;
+}
+
 .bird-dex-card-visual {
   position: relative;
   width: 100%;
@@ -982,6 +990,7 @@ select {
 }
 
 .bird-dex-screen--detail {
+  position: relative;
   background: #e6e0d6;
 }
 
@@ -1121,13 +1130,14 @@ select {
 }
 
 .bird-dex-desc-popup-screen {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: 60;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px 16px;
+  box-sizing: border-box;
   background: rgba(58, 42, 28, 0.42);
 }
 
@@ -1170,6 +1180,10 @@ select {
   font-size: 14px;
   line-height: 1.55;
   font-weight: 600;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .bird-dex-detail-name {

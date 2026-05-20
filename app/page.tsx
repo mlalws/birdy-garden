@@ -3240,30 +3240,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {isDexDescPopupOpen ? (
-                    <div
-                      className="bird-dex-desc-popup-screen"
-                      role="dialog"
-                      aria-modal="true"
-                      aria-label={`${dexDetailSpecies} 설명`}
-                      onClick={() => setIsDexDescPopupOpen(false)}
-                    >
-                      <div className="bird-dex-desc-popup" onClick={(event) => event.stopPropagation()}>
-                        <header className="bird-dex-desc-popup-header">
-                          <button
-                            type="button"
-                            className="bird-dex-desc-popup-close"
-                            onClick={() => setIsDexDescPopupOpen(false)}
-                            aria-label="설명 닫기"
-                          >
-                            <img src="/x.png" alt="" width={44} height={44} decoding="sync" className="bird-dex-desc-popup-close-img" />
-                          </button>
-                        </header>
-                        <p className="bird-dex-desc-popup-text">{dexDetailDescription}</p>
-                      </div>
-                    </div>
-                  ) : null}
-
                   <h2 className="bird-dex-detail-name">{dexDetailSpecies}</h2>
 
                   <div className="bird-dex-detail-panel">
@@ -3347,6 +3323,30 @@ export default function Home() {
                     </div>
                   ) : null}
                 </div>
+
+                {isDexDescPopupOpen ? (
+                  <div
+                    className="bird-dex-desc-popup-screen"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={`${dexDetailSpecies} 설명`}
+                    onClick={() => setIsDexDescPopupOpen(false)}
+                  >
+                    <div className="bird-dex-desc-popup" onClick={(event) => event.stopPropagation()}>
+                      <header className="bird-dex-desc-popup-header">
+                        <button
+                          type="button"
+                          className="bird-dex-desc-popup-close"
+                          onClick={() => setIsDexDescPopupOpen(false)}
+                          aria-label="설명 닫기"
+                        >
+                          <img src="/x.png" alt="" width={44} height={44} decoding="sync" className="bird-dex-desc-popup-close-img" />
+                        </button>
+                      </header>
+                      <p className="bird-dex-desc-popup-text">{dexDetailDescription}</p>
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : (
               <>
