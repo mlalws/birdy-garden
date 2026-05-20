@@ -30,7 +30,7 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     femaleImageSrc: "/gduck.png",
     femaleWaterImageSrc: "/wgduck.png",
     placement: "waterfowl",
-    listBlurb: "수컷은 녹색 머리, 연못에서 가장 흔한 오리",
+    listBlurb: "수컷은 녹색 머리를 가진 우리나라에서 가장 흔하게 보이는 오리입니다.",
   },
   {
     id: "mandarin_duck",
@@ -40,28 +40,31 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     femaleImageSrc: "/gang.png",
     femaleWaterImageSrc: "/wgang.png",
     placement: "waterfowl",
-    listBlurb: "붉고 푸른 깃이 화려한 대표 물새",
+    listBlurb: "수컷 깃이 붉고 푸르게 번져 보일 만큼 화려한 연못의 물새입니다.",
   },
   {
     id: "magpie",
     name: "까치",
     imageSrc: "/kachi.png",
     placement: "land",
-    listBlurb: "마을과 공원에서 흔한 검은색과 흰색 텃새",
+    listBlurb:
+      "거울 속 자신을 알아볼 정도로 지능이 높고, 흑백의 깃털을 가진 대표적인 텃새입니다.",
   },
   {
     id: "sparrow",
     name: "참새",
     imageSrc: "/cham.png",
     placement: "land",
-    listBlurb: "사람 가까이에서도 자주 보는 작은 새",
+    listBlurb:
+      "갈색의 작고 통통한 몸집을 가졌으며, 늘 무리 지어 다니며 짹짹거리는 친숙한 새입니다.",
   },
   {
     id: "crow",
     name: "까마귀",
     imageSrc: "/kamak.png",
     placement: "land",
-    listBlurb: "도시와 들에서 흔한 크고 검은 새",
+    listBlurb:
+      "온몸이 새검은 깃털로 덮여 있으며, 도구를 쓸 줄 알만큼 조류 중 지능이 가장 뛰어납니다.",
   },
   {
     id: "grey_heron",
@@ -69,7 +72,8 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     imageSrc: "/haeyo.png",
     waterImageSrc: "/whaeyo.png",
     placement: "wader",
-    listBlurb: "밤에도 활동하는 야행성 큰 물새",
+    listBlurb:
+      "낮에는 숨어있다가 밤에 주로 활동하며, 물가에서 물고기를 사냥하는 야행성 물새입니다.",
   },
   {
     id: "egret",
@@ -77,7 +81,8 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     imageSrc: "/baeklo.png",
     waterImageSrc: "/wbaeklo.png",
     placement: "wader",
-    listBlurb: "하얀 깃으로 물가를 걷는 큰 물새",
+    listBlurb:
+      "온몸이 눈부시게 하얀 깃털로 뒤덮여 있으며, 긴 다리로 물가를 거니는 우아한 새입니다.",
   },
   {
     id: "cattle_egret",
@@ -85,7 +90,8 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     imageSrc: "/whyga.png",
     waterImageSrc: "/wwhyga.png",
     placement: "wader",
-    listBlurb: "논과 들에서 흔한 작은 흰 물새",
+    listBlurb:
+      "하천 생태계의 최상위 포식자로, 큰 덩치와 긴 목을 가진 우리나라에서 가장 큰 왜가리과 새입니다.",
   },
 ];
 
