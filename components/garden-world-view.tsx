@@ -15,6 +15,8 @@ type BgLayout = {
 };
 
 const FULL_BG_LAYOUT: BgLayout = { leftPct: 0, topPct: 0, widthPct: 100, heightPct: 100 };
+const DEFAULT_BIRD_SPRITE = "/test.png";
+const MAGPIE_SPRITE = "/kachi.png";
 
 /** object-fit: contain + left center 기준 실제 그려진 배경 영역 */
 function computeContainedImageLayout(
@@ -58,6 +60,13 @@ function mapBirdAnchorPosition(bird: PlacedBird, layout: BgLayout): { left: stri
   const left = layout.leftPct + (bird.xPercent / 100) * layout.widthPct;
   const top = layout.topPct + (bird.yPercent / 100) * layout.heightPct;
   return { left: `${left}%`, top: `${top}%` };
+}
+
+function isMagpieRecord(record: BirdRecord | undefined): boolean {
+  if (!record) {
+    return false;
+  }
+  return record.listBirdId === "magpie" || record.speciesName?.trim() === "까치";
 }
 
 type GardenWorldViewProps = {
@@ -180,6 +189,10 @@ export function GardenWorldView({
       <div className="garden-world-birds" aria-hidden={birds.length === 0}>
         {birds.map((bird) => {
           const isBubbleOpen = !readOnly && selectedBird?.id === bird.id;
+          const record = bird.recordId ? recordById.get(bird.recordId) : undefined;
+          const isMagpie = isMagpieRecord(record);
+          const birdSpriteSrc = isMagpie ? MAGPIE_SPRITE : DEFAULT_BIRD_SPRITE;
+          const inWater = isMagpie ? false : bird.inWater !== false;
           const displaySize = Math.max(8, Math.round(getBirdDisplaySize(bird) * birdSizeScale));
           const bubbleWidth = Math.min(200, Math.max(152, Math.round(displaySize * 2.6)));
           const anchorPos = mapBirdAnchorPosition(bird, isMini ? FULL_BG_LAYOUT : bgLayout);
@@ -192,25 +205,25 @@ export function GardenWorldView({
             >
               {readOnly ? (
                 <div
-                  className={`bird bird--static${bird.inWater !== false ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}`}
+                  className={`bird bird--static${inWater ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}`}
                   style={{ width: `${displaySize}px`, height: `${displaySize}px` }}
                   aria-hidden
                 >
                   <span className="bird-sprite">
-                    <Image src="/test.png" alt="" fill sizes="64px" className="bird-sprite-img" />
+                    <Image src={birdSpriteSrc} alt="" fill sizes="64px" className="bird-sprite-img" />
                   </span>
                 </div>
               ) : (
                 <button
                   type="button"
-                  className={`bird${bird.inWater !== false ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}${isBubbleOpen ? " bird--selected" : ""}`}
+                  className={`bird${inWater ? " bird--in-water" : " bird--on-shore"}${bird.facing === "left" ? " bird--facing-left" : " bird--facing-right"}${isBubbleOpen ? " bird--selected" : ""}`}
                   style={{ width: `${displaySize}px`, height: `${displaySize}px` }}
                   onClick={() => onBirdClick?.(bird.id)}
                   aria-label="정원에 둔 조류 보기"
                   aria-expanded={isBubbleOpen}
                 >
                   <span className="bird-sprite">
-                    <Image src="/test.png" alt="" fill sizes="64px" className="bird-sprite-img" />
+                    <Image src={birdSpriteSrc} alt="" fill sizes="64px" className="bird-sprite-img" />
                   </span>
                 </button>
               )}

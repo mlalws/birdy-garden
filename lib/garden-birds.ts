@@ -26,6 +26,16 @@ const WATER_SLOTS: Slot[] = [
   { xPercent: 88, yPercent: 86 },
 ];
 
+/** 까치 전용 (잔디/가지) */
+const MAGPIE_SLOTS: Slot[] = [
+  { xPercent: 11, yPercent: 60 },
+  { xPercent: 20, yPercent: 66 },
+  { xPercent: 32, yPercent: 74 },
+  { xPercent: 78, yPercent: 72 },
+  { xPercent: 88, yPercent: 65 },
+  { xPercent: 92, yPercent: 58 },
+];
+
 /** 화면 위쪽(멀리)일수록 작게, 아래(가까이)일수록 크게 */
 const DEPTH_FAR_Y = 72;
 const DEPTH_NEAR_Y = 92;
@@ -42,29 +52,37 @@ export function getBirdDisplaySize(bird: Pick<PlacedBird, "yPercent">): number {
   return Math.round(SIZE_FAR + t * (SIZE_NEAR - SIZE_FAR));
 }
 
-export function createGardenBirds(count: number, offset: number, recordId: string): PlacedBird[] {
+export function createGardenBirds(
+  count: number,
+  offset: number,
+  recordId: string,
+  options?: { listBirdId?: string | null }
+): PlacedBird[] {
   const stamp = Date.now();
+  const isMagpie = options?.listBirdId === "magpie";
   return Array.from({ length: count }, (_, idx) => {
     const seq = offset + idx;
-    const onShore = Math.random() < 0.22;
-    const pool = onShore ? SHORE_SLOTS : WATER_SLOTS;
+    const onShore = isMagpie ? true : Math.random() < 0.22;
+    const pool = isMagpie ? MAGPIE_SLOTS : onShore ? SHORE_SLOTS : WATER_SLOTS;
     const base = pool[seq % pool.length];
     const ring = Math.floor(seq / pool.length);
-    const xJitter = (ring % 2 === 0 ? 1 : -1) * Math.min(3, ring + 1);
+    const xJitter = (ring % 2 === 0 ? 1 : -1) * Math.min(isMagpie ? 2 : 3, ring + 1);
     const yJitter = ((seq + ring) % 3) - 1;
 
-    const yPercent = onShore
-      ? clamp(base.yPercent + yJitter * 0.35, 71, 79)
-      : clamp(base.yPercent + yJitter * 0.35, 80, 93);
+    const yPercent = isMagpie
+      ? clamp(base.yPercent + yJitter * 0.45, 56, 79)
+      : onShore
+        ? clamp(base.yPercent + yJitter * 0.35, 71, 79)
+        : clamp(base.yPercent + yJitter * 0.35, 80, 93);
 
     return {
       id: `garden-${stamp}-${seq}-${Math.random().toString(36).slice(2, 6)}`,
       recordId,
-      xPercent: clamp(base.xPercent + xJitter, 8, 92),
+      xPercent: clamp(base.xPercent + xJitter, isMagpie ? 6 : 8, 94),
       yPercent,
       size: getBirdDisplaySize({ yPercent }),
       facing: pickFacing(),
-      inWater: !onShore,
+      inWater: isMagpie ? false : !onShore,
     };
   });
 }

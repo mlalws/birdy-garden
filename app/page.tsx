@@ -160,7 +160,9 @@ type RegistrationConfirmPayload = {
   /** 짹짹짹 화면·도감에 쓰는 목록상 종 이름 */
   speciesName: string;
   photoUrl: string | null;
+  fallbackImageSrc: string;
   totalSightings: number;
+  isFirstDiscovery: boolean;
   /** 이번 주 1위 등극·갱신 시 짹짹짹 화면 하단 배너 */
   weeklyRankBanner?: string | null;
 };
@@ -179,6 +181,11 @@ const displayIdFromAuthEmail = (email: string | undefined | null) => {
   }
   return email.slice(0, at);
 };
+
+const SPECIES_IMAGE_BY_NAME = new Map(KNOWN_DEX_SPECIES.map((item) => [item.name, item.imageSrc]));
+
+const getSpeciesFallbackImageSrc = (speciesName: string) =>
+  SPECIES_IMAGE_BY_NAME.get(speciesName.trim()) ?? DEFAULT_BIRD_IMAGE;
 
 export default function Home() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -1079,7 +1086,7 @@ export default function Home() {
     const speciesNameForConfirm = isUnlisted
       ? displayName
       : registrationSpeciesName?.trim() || displayName;
-    const newBirds = createGardenBirds(amount, gardenBirds.length, recordId);
+    const newBirds = createGardenBirds(amount, gardenBirds.length, recordId, { listBirdId: selectedListBirdId });
     const newRecord: BirdRecord = {
       id: recordId,
       name: displayName,
@@ -1092,7 +1099,10 @@ export default function Home() {
     };
     const nextBirds = normalizePlacedBirds([...gardenBirds, ...newBirds]);
     const nextRecords = [...birdRecords, newRecord];
+    const previousSightings = countLifetimeSpeciesSightings(birdRecords, dailyArchives, speciesNameForConfirm);
     const totalSightings = countLifetimeSpeciesSightings(nextRecords, dailyArchives, speciesNameForConfirm);
+    const isFirstDiscovery = previousSightings === 0;
+    const fallbackImageSrc = getSpeciesFallbackImageSrc(speciesNameForConfirm);
 
     markGardenDirty();
     setGardenBirds(nextBirds);
@@ -1103,7 +1113,9 @@ export default function Home() {
     setRegistrationConfirm({
       speciesName: speciesNameForConfirm,
       photoUrl: capturedPhoto,
+      fallbackImageSrc,
       totalSightings,
+      isFirstDiscovery,
     });
 
     void (async () => {
@@ -2136,7 +2148,7 @@ export default function Home() {
                   ) : (
                     <div className="bird-confirm-photo-default">
                       <Image
-                        src={DEFAULT_BIRD_IMAGE}
+                        src={registrationConfirm.fallbackImageSrc}
                         alt={registrationConfirm.speciesName}
                         fill
                         sizes="240px"
@@ -2147,11 +2159,18 @@ export default function Home() {
                 </div>
               </div>
 
-              <p className="bird-confirm-message">
-                <span className="bird-confirm-message-name">{registrationConfirm.speciesName}</span>를 벌써{" "}
-                <span className="bird-confirm-message-count">{registrationConfirm.totalSightings}</span>번이나
-                발견하셨네요!
-              </p>
+              {registrationConfirm.isFirstDiscovery ? (
+                <p className="bird-confirm-message">
+                  <span className="bird-confirm-message-name">{registrationConfirm.speciesName}</span>를 처음
+                  발견하셨네요!
+                </p>
+              ) : (
+                <p className="bird-confirm-message">
+                  <span className="bird-confirm-message-name">{registrationConfirm.speciesName}</span>를 벌써{" "}
+                  <span className="bird-confirm-message-count">{registrationConfirm.totalSightings}</span>번이나
+                  발견하셨네요!
+                </p>
+              )}
 
               {registrationConfirm.weeklyRankBanner ? (
                 <p className="bird-confirm-rank-banner" role="status">
