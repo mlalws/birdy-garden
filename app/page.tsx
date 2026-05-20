@@ -27,11 +27,12 @@ import {
 } from "@/lib/profile";
 import { readProfileImageAsDataUrl } from "@/lib/profile-image";
 import { GardenWorldView } from "@/components/garden-world-view";
-import { createGardenBirds } from "@/lib/garden-birds";
+import { createGardenBirds, normalizePlacedBirds } from "@/lib/garden-birds";
 import {
   applyGardenDayRollover,
   buildCalendarCells,
   computeDayBirdStats,
+  countLifetimeSpeciesSightings,
   dateKeyHasGarden,
   formatMonthLabel,
   getKstDateKey,
@@ -160,19 +161,6 @@ type RegistrationConfirmPayload = {
   totalSightings: number;
   /** 이번 주 1위 등극·갱신 시 짹짹짹 화면 하단 배너 */
   weeklyRankBanner?: string | null;
-};
-
-const countSpeciesSightings = (records: BirdRecord[], speciesName: string) => {
-  const key = speciesName.trim();
-  if (!key) {
-    return 0;
-  }
-  return records.reduce((sum, record) => {
-    if (getRecordSpeciesLabel(record) === key) {
-      return sum + Math.max(1, record.count);
-    }
-    return sum;
-  }, 0);
 };
 
 /** Supabase가 거부하지 않는 가짜 이메일 도메인 (하이픈 없는 FQDN) */
@@ -440,7 +428,7 @@ export default function Home() {
 
   const applyGardenPayload = (payload: UserGardenPayload) => {
     const migrated = migrateGardenPayload(payload);
-    setGardenBirds(migrated.birds);
+    setGardenBirds(normalizePlacedBirds(migrated.birds));
     setBirdRecords(migrated.records);
     setDexSeenSpecies(migrated.dexSeenSpecies ?? []);
     setDailyArchives(migrated.dailyArchives ?? {});
@@ -1080,9 +1068,9 @@ export default function Home() {
       count: amount,
       createdAt: new Date().toISOString(),
     };
-    const nextBirds = [...gardenBirds, ...newBirds];
+    const nextBirds = normalizePlacedBirds([...gardenBirds, ...newBirds]);
     const nextRecords = [...birdRecords, newRecord];
-    const totalSightings = countSpeciesSightings(nextRecords, speciesNameForConfirm);
+    const totalSightings = countLifetimeSpeciesSightings(nextRecords, dailyArchives, speciesNameForConfirm);
 
     markGardenDirty();
     setGardenBirds(nextBirds);
@@ -1090,37 +1078,46 @@ export default function Home() {
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
 
-    let weeklyRankBanner: string | null = null;
-    if (userId && isSupabaseConfigured()) {
-      try {
-        const rankingResult = await recordWeeklyDiscovery(userId, profileUsername.trim() || "탐험가", amount);
-        if (rankingResult) {
-          weeklyRankBanner = weeklyRankBannerMessage(rankingResult);
-        }
-      } catch {
-        // 랭킹 실패해도 등록·짹짹짹 화면은 진행
-      }
-    }
-
     setRegistrationConfirm({
       speciesName: speciesNameForConfirm,
       photoUrl: capturedPhoto,
       totalSightings,
-      weeklyRankBanner,
     });
 
-    if (userId) {
-      try {
-        await persistGarden(userId, {
-          birds: nextBirds,
-          records: nextRecords,
-          dexSeenSpecies,
-          ...(userProfile ? { profile: userProfile } : {}),
-        });
-      } catch (error) {
-        reportGardenSyncError(error);
+    void (async () => {
+      let weeklyRankBanner: string | null = null;
+      if (userId && isSupabaseConfigured()) {
+        try {
+          const rankingResult = await recordWeeklyDiscovery(userId, profileUsername.trim() || "탐험가", amount);
+          if (rankingResult) {
+            weeklyRankBanner = weeklyRankBannerMessage(rankingResult);
+          }
+        } catch {
+          // 랭킹 실패해도 짹짹짹 화면은 유지
+        }
       }
-    }
+
+      if (weeklyRankBanner) {
+        setRegistrationConfirm((prev) =>
+          prev ? { ...prev, weeklyRankBanner } : prev
+        );
+      }
+
+      if (userId) {
+        try {
+          await persistGarden(userId, {
+            birds: nextBirds,
+            records: nextRecords,
+            dexSeenSpecies,
+            currentGardenDate,
+            dailyArchives,
+            ...(userProfile ? { profile: userProfile } : {}),
+          });
+        } catch (error) {
+          reportGardenSyncError(error);
+        }
+      }
+    })();
   };
 
   const submitLogout = async () => {

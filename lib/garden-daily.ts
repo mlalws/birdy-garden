@@ -48,6 +48,30 @@ export type DayBirdStats = {
   bySpecies: { name: string; count: number }[];
 };
 
+/** 앱 사용 누적 — 오늘 기록 + 과거 일별 아카이브 전부 합산 */
+export function countLifetimeSpeciesSightings(
+  liveRecords: BirdRecord[],
+  archives: Record<string, DailyGardenArchive> | undefined,
+  speciesName: string
+): number {
+  const key = speciesName.trim();
+  if (!key) {
+    return 0;
+  }
+
+  const archiveRecords = archives
+    ? Object.values(archives).flatMap((archive) => archive.records)
+    : [];
+
+  const allRecords = [...liveRecords, ...archiveRecords];
+  return allRecords.reduce((sum, record) => {
+    if (getRecordSpeciesLabel(record) === key) {
+      return sum + Math.max(1, record.count);
+    }
+    return sum;
+  }, 0);
+}
+
 /** 캘린더·도감에 쓸 목록상 종 이름 */
 export function getRecordSpeciesLabel(record: BirdRecord): string {
   const migrated = migrateBirdRecord(record);

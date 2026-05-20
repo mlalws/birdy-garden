@@ -4,33 +4,33 @@ export type BirdFacing = "left" | "right";
 
 type Slot = Pick<PlacedBird, "xPercent" | "yPercent">;
 
-/** 호숫가·잔디 (멀리 — 위쪽) */
+/** 연못 가장자리 잔디 */
 const SHORE_SLOTS: Slot[] = [
-  { xPercent: 14, yPercent: 63 },
-  { xPercent: 26, yPercent: 60 },
-  { xPercent: 38, yPercent: 62 },
-  { xPercent: 50, yPercent: 59 },
-  { xPercent: 62, yPercent: 61 },
-  { xPercent: 74, yPercent: 60 },
-  { xPercent: 86, yPercent: 63 },
+  { xPercent: 14, yPercent: 74 },
+  { xPercent: 26, yPercent: 72 },
+  { xPercent: 38, yPercent: 75 },
+  { xPercent: 50, yPercent: 73 },
+  { xPercent: 62, yPercent: 74 },
+  { xPercent: 74, yPercent: 72 },
+  { xPercent: 86, yPercent: 75 },
 ];
 
-/** 호수 안 (가까이 — 아래쪽) */
+/** 연못 안 */
 const WATER_SLOTS: Slot[] = [
-  { xPercent: 19, yPercent: 72 },
-  { xPercent: 30, yPercent: 75 },
-  { xPercent: 41, yPercent: 74 },
-  { xPercent: 55, yPercent: 77 },
-  { xPercent: 67, yPercent: 73 },
-  { xPercent: 78, yPercent: 80 },
-  { xPercent: 88, yPercent: 76 },
+  { xPercent: 19, yPercent: 82 },
+  { xPercent: 30, yPercent: 85 },
+  { xPercent: 41, yPercent: 83 },
+  { xPercent: 55, yPercent: 88 },
+  { xPercent: 67, yPercent: 84 },
+  { xPercent: 78, yPercent: 90 },
+  { xPercent: 88, yPercent: 86 },
 ];
 
 /** 화면 위쪽(멀리)일수록 작게, 아래(가까이)일수록 크게 */
-const DEPTH_FAR_Y = 58;
-const DEPTH_NEAR_Y = 84;
-const SIZE_FAR = 30;
-const SIZE_NEAR = 48;
+const DEPTH_FAR_Y = 72;
+const DEPTH_NEAR_Y = 92;
+const SIZE_FAR = 45;
+const SIZE_NEAR = 72;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -46,7 +46,7 @@ export function createGardenBirds(count: number, offset: number, recordId: strin
   const stamp = Date.now();
   return Array.from({ length: count }, (_, idx) => {
     const seq = offset + idx;
-    const onShore = Math.random() < 0.4;
+    const onShore = Math.random() < 0.22;
     const pool = onShore ? SHORE_SLOTS : WATER_SLOTS;
     const base = pool[seq % pool.length];
     const ring = Math.floor(seq / pool.length);
@@ -54,8 +54,8 @@ export function createGardenBirds(count: number, offset: number, recordId: strin
     const yJitter = ((seq + ring) % 3) - 1;
 
     const yPercent = onShore
-      ? clamp(base.yPercent + yJitter * 0.35, 56, 68)
-      : clamp(base.yPercent + yJitter * 0.35, 70, 86);
+      ? clamp(base.yPercent + yJitter * 0.35, 71, 79)
+      : clamp(base.yPercent + yJitter * 0.35, 80, 93);
 
     return {
       id: `garden-${stamp}-${seq}-${Math.random().toString(36).slice(2, 6)}`,
@@ -67,4 +67,29 @@ export function createGardenBirds(count: number, offset: number, recordId: strin
       inWater: !onShore,
     };
   });
+}
+
+/** 저장된 좌표가 하늘 쪽(구버전)이면 연못·잔디 구역으로 보정 */
+export function normalizePlacedBird(bird: PlacedBird): PlacedBird {
+  const wantsWater = bird.inWater !== false;
+  let yPercent = bird.yPercent;
+
+  if (yPercent < 71) {
+    yPercent = wantsWater ? 84 + (bird.xPercent % 5) : 75;
+  } else if (wantsWater) {
+    yPercent = clamp(yPercent, 80, 93);
+  } else {
+    yPercent = clamp(yPercent, 71, 79);
+  }
+
+  return {
+    ...bird,
+    yPercent,
+    inWater: wantsWater,
+    size: getBirdDisplaySize({ yPercent }),
+  };
+}
+
+export function normalizePlacedBirds(birds: PlacedBird[]): PlacedBird[] {
+  return birds.map(normalizePlacedBird);
 }

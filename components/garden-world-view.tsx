@@ -1,11 +1,64 @@
 "use client";
 
 import Image from "next/image";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { getBirdDisplaySize } from "@/lib/garden-birds";
 import type { BirdRecord, PlacedBird } from "@/lib/supabase/garden";
 
 const BACKGROUND_SRC = "/background.jpg";
+
+type BgLayout = {
+  leftPct: number;
+  topPct: number;
+  widthPct: number;
+  heightPct: number;
+};
+
+const FULL_BG_LAYOUT: BgLayout = { leftPct: 0, topPct: 0, widthPct: 100, heightPct: 100 };
+
+/** object-fit: contain + left center 기준 실제 그려진 배경 영역 */
+function computeContainedImageLayout(
+  containerW: number,
+  containerH: number,
+  imageW: number,
+  imageH: number
+): BgLayout {
+  if (containerW <= 0 || containerH <= 0 || imageW <= 0 || imageH <= 0) {
+    return FULL_BG_LAYOUT;
+  }
+
+  const imageAspect = imageW / imageH;
+  const containerAspect = containerW / containerH;
+  let renderW: number;
+  let renderH: number;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (containerAspect > imageAspect) {
+    renderH = containerH;
+    renderW = containerH * imageAspect;
+    offsetX = 0;
+    offsetY = 0;
+  } else {
+    renderW = containerW;
+    renderH = containerW / imageAspect;
+    offsetX = 0;
+    offsetY = (containerH - renderH) / 2;
+  }
+
+  return {
+    leftPct: (offsetX / containerW) * 100,
+    topPct: (offsetY / containerH) * 100,
+    widthPct: (renderW / containerW) * 100,
+    heightPct: (renderH / containerH) * 100,
+  };
+}
+
+function mapBirdAnchorPosition(bird: PlacedBird, layout: BgLayout): { left: string; top: string } {
+  const left = layout.leftPct + (bird.xPercent / 100) * layout.widthPct;
+  const top = layout.topPct + (bird.yPercent / 100) * layout.heightPct;
+  return { left: `${left}%`, top: `${top}%` };
+}
 
 type GardenWorldViewProps = {
   birds: PlacedBird[];
@@ -33,8 +86,25 @@ export function GardenWorldView({
   className = "",
 }: GardenWorldViewProps) {
   const worldRef = useRef<HTMLDivElement>(null);
+  const bgImgRef = useRef<HTMLImageElement>(null);
   const [worldSize, setWorldSize] = useState<{ width: number; height: number } | null>(null);
+  const [bgLayout, setBgLayout] = useState<BgLayout>(FULL_BG_LAYOUT);
   const isMini = className.includes("garden-world--mini");
+
+  const measureBgLayout = useCallback(() => {
+    if (isMini) {
+      setBgLayout(FULL_BG_LAYOUT);
+      return;
+    }
+    const world = worldRef.current;
+    const img = bgImgRef.current;
+    if (!world || !img?.naturalWidth) {
+      return;
+    }
+    setBgLayout(
+      computeContainedImageLayout(world.clientWidth, world.clientHeight, img.naturalWidth, img.naturalHeight)
+    );
+  }, [isMini]);
 
   useLayoutEffect(() => {
     if (isMini) {
@@ -65,17 +135,21 @@ export function GardenWorldView({
         const widthAtFullHeight = viewH * aspect;
         const nextWidth = Math.ceil(Math.max(viewW, widthAtFullHeight));
         setWorldSize({ width: nextWidth, height: viewH });
+        requestAnimationFrame(measureBgLayout);
       };
     };
 
     updateSize();
-    const observer = new ResizeObserver(updateSize);
+    const observer = new ResizeObserver(() => {
+      updateSize();
+      measureBgLayout();
+    });
     observer.observe(scrollEl);
     return () => {
       cancelled = true;
       observer.disconnect();
     };
-  }, [isMini]);
+  }, [isMini, measureBgLayout]);
 
   const recordById = new Map(records.map((record) => [record.id, record]));
   const selectedBird = birds.find((bird) => bird.id === selectedBirdId) ?? null;
@@ -95,18 +169,26 @@ export function GardenWorldView({
       style={worldStyle}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={BACKGROUND_SRC} alt="" className="garden-world-bg" draggable={false} />
+      <img
+        ref={bgImgRef}
+        src={BACKGROUND_SRC}
+        alt=""
+        className="garden-world-bg"
+        draggable={false}
+        onLoad={measureBgLayout}
+      />
       <div className="garden-world-birds" aria-hidden={birds.length === 0}>
         {birds.map((bird) => {
           const isBubbleOpen = !readOnly && selectedBird?.id === bird.id;
           const displaySize = Math.max(8, Math.round(getBirdDisplaySize(bird) * birdSizeScale));
           const bubbleWidth = Math.min(200, Math.max(152, Math.round(displaySize * 2.6)));
+          const anchorPos = mapBirdAnchorPosition(bird, isMini ? FULL_BG_LAYOUT : bgLayout);
 
           return (
             <div
               key={bird.id}
               className={`bird-anchor${isBubbleOpen ? " bird-anchor--open" : ""}`}
-              style={{ left: `${bird.xPercent}%`, top: `${bird.yPercent}%` }}
+              style={anchorPos}
             >
               {readOnly ? (
                 <div
