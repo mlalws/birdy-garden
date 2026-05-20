@@ -60,6 +60,15 @@ export function formatKstWeekLabel(weekKey: string): string {
   return `${parsed.year}년 ${parsed.week}주차`;
 }
 
+/** KST 날짜 키(YYYY-MM-DD)가 속한 ISO 주차 */
+export function getKstWeekKeyFromDateKey(dateKey: string): string {
+  const [year, month, day] = dateKey.split("-").map((part) => Number(part));
+  if (!year || !month || !day) {
+    return getKstWeekKey();
+  }
+  return getKstWeekKey(new Date(year, month - 1, day));
+}
+
 export function formatKstWeekPeriod(weekKey: string): string {
   const monday = getKstWeekMonday(weekKey);
   if (!monday) {

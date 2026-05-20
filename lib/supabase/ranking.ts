@@ -1,5 +1,6 @@
-import { getKstWeekKey } from "@/lib/garden-weekly";
+import { getKstWeekKey, getKstWeekKeyFromDateKey } from "@/lib/garden-weekly";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import type { BirdRecord, DailyGardenArchive } from "@/lib/supabase/garden";
 
 export type WeeklyRankingRow = {
   user_id: string;
@@ -27,6 +28,99 @@ export const rankFromSortedRows = (rows: WeeklyRankingRow[], userId: string): nu
   const index = rows.findIndex((row) => row.user_id === userId);
   return index >= 0 ? index + 1 : null;
 };
+
+/** 이번 주 정원 기록(오늘 + 일별 아카이브)에서 발견 마리 수 합산 */
+export function countWeekDiscoveriesFromGarden(
+  liveRecords: BirdRecord[],
+  archives: Record<string, DailyGardenArchive> | undefined,
+  weekKey = getKstWeekKey()
+): number {
+  const seenRecordIds = new Set<string>();
+  let sum = 0;
+
+  const addRecord = (record: BirdRecord) => {
+    if (seenRecordIds.has(record.id)) {
+      return;
+    }
+    seenRecordIds.add(record.id);
+    sum += Math.max(1, record.count);
+  };
+
+  for (const record of liveRecords) {
+    if (!record.createdAt) {
+      continue;
+    }
+    if (getKstWeekKey(new Date(record.createdAt)) !== weekKey) {
+      continue;
+    }
+    addRecord(record);
+  }
+
+  if (archives) {
+    for (const [dateKey, archive] of Object.entries(archives)) {
+      if (getKstWeekKeyFromDateKey(dateKey) !== weekKey) {
+        continue;
+      }
+      for (const record of archive.records) {
+        addRecord(record);
+      }
+    }
+  }
+
+  return sum;
+}
+
+/** 랭킹 테이블 생성 전·저장 실패분 — 정원 데이터 기준으로 이번 주 점수 보정 */
+export async function syncWeeklyRankingFromGarden(
+  userId: string,
+  nickname: string,
+  liveRecords: BirdRecord[],
+  archives: Record<string, DailyGardenArchive> | undefined
+): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    return;
+  }
+
+  const weekKey = getKstWeekKey();
+  const fromGarden = countWeekDiscoveriesFromGarden(liveRecords, archives, weekKey);
+  if (fromGarden <= 0) {
+    return;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  const safeNickname = nickname.trim() || "탐험가";
+
+  const { data: existing, error: readError } = await supabase
+    .from("weekly_rankings")
+    .select("discovery_count")
+    .eq("user_id", userId)
+    .eq("week_key", weekKey)
+    .maybeSingle();
+
+  if (readError) {
+    throw readError;
+  }
+
+  const nextCount = Math.max(existing?.discovery_count ?? 0, fromGarden);
+  if (nextCount === existing?.discovery_count) {
+    return;
+  }
+
+  const { error: upsertError } = await supabase.from("weekly_rankings").upsert(
+    {
+      user_id: userId,
+      week_key: weekKey,
+      discovery_count: nextCount,
+      nickname: safeNickname,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id,week_key" }
+  );
+
+  if (upsertError) {
+    throw upsertError;
+  }
+}
 
 export async function fetchWeeklyLeaderboard(
   weekKey = getKstWeekKey(),

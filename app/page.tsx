@@ -49,6 +49,7 @@ import {
   fetchWeeklyLeaderboard,
   rankFromSortedRows,
   recordWeeklyDiscovery,
+  syncWeeklyRankingFromGarden,
   weeklyRankBannerMessage,
   type WeeklyRankingRow,
 } from "@/lib/supabase/ranking";
@@ -917,7 +918,7 @@ export default function Home() {
   };
 
   const loadWeeklyRanking = async () => {
-    if (!isLoggedIn || !isSupabaseConfigured()) {
+    if (!isLoggedIn || !isSupabaseConfigured() || !userId) {
       setWeeklyLeaderboard([]);
       setRankingError("");
       return;
@@ -926,6 +927,12 @@ export default function Home() {
     setIsRankingLoading(true);
     setRankingError("");
     try {
+      await syncWeeklyRankingFromGarden(
+        userId,
+        profileUsername.trim() || "탐험가",
+        birdRecords,
+        dailyArchives
+      );
       const rows = await fetchWeeklyLeaderboard(getKstWeekKey());
       setWeeklyLeaderboard(rows);
     } catch (error) {
