@@ -53,10 +53,13 @@ const buildSightPinHtml = (imageSrc: string, count: number, selected: boolean) =
   const safeSrc = escapeHtml(imageSrc);
   const selectedClass = selected ? " bird-map-sight-pin--selected" : "";
   return `<div class="bird-map-sight-pin${selectedClass}" aria-hidden="true">
-    <span class="bird-map-sight-pin-bubble">
-      <img src="${safeSrc}" alt="" class="bird-map-sight-pin-img" />
-    </span>
-    <span class="bird-map-sight-pin-count">${count}</span>
+    <div class="bird-map-sight-pin-badge">
+      <span class="bird-map-sight-pin-photo">
+        <img src="${safeSrc}" alt="" class="bird-map-sight-pin-img" />
+      </span>
+      <span class="bird-map-sight-pin-count">${count}</span>
+    </div>
+    <span class="bird-map-sight-pin-tip"></span>
   </div>`;
 };
 
@@ -208,8 +211,8 @@ export function LocationMap({
           icon: L.divIcon({
             className: "bird-map-sight-pin-wrap",
             html: buildSightPinHtml(point.imageSrc, point.count, !!point.selected),
-            iconSize: [52, 62],
-            iconAnchor: [26, 58],
+            iconSize: [58, 82],
+            iconAnchor: [29, 82],
           }),
         });
 
