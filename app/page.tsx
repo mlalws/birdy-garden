@@ -213,6 +213,7 @@ export default function Home() {
   const [loginPassword, setLoginPassword] = useState("");
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState("");
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
+  const [isLogoutSubmitting, setIsLogoutSubmitting] = useState(false);
   const [loginMessage, setLoginMessage] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [profileUsername, setProfileUsername] = useState("");
@@ -823,13 +824,21 @@ export default function Home() {
     setSelectedListBirdId(null);
   };
 
-  const openBirdRegistration = (opts?: { name?: string; mode?: "listed" | "unlisted" }) => {
+  const openBirdRegistration = (opts?: {
+    name?: string;
+    mode?: "listed" | "unlisted";
+    listBirdId?: string | null;
+  }) => {
     const mode = opts?.mode ?? "listed";
     const nextName =
       mode === "unlisted" ? "" : opts?.name !== undefined ? opts.name : "청둥오리";
     setRegistrationSpeciesName(mode === "unlisted" ? null : nextName);
     setIsBirdListOpen(false);
-    setSelectedListBirdId(null);
+    if (mode === "unlisted") {
+      setSelectedListBirdId(null);
+    } else {
+      setSelectedListBirdId(opts?.listBirdId ?? null);
+    }
     setBirdRegistrationMode(mode);
     setIsBirdInfoScreenOpen(true);
     setIsPhotoPopupOpen(false);
@@ -849,7 +858,7 @@ export default function Home() {
     if (!item || item.isPlaceholder) {
       return;
     }
-    openBirdRegistration({ name: item.name, mode: "listed" });
+    openBirdRegistration({ name: item.name, mode: "listed", listBirdId: item.id });
   };
 
   const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1152,11 +1161,15 @@ export default function Home() {
   };
 
   const submitLogout = async () => {
+    if (isLogoutSubmitting) {
+      return;
+    }
     try {
+      setIsLogoutSubmitting(true);
+      setIsProfileOpen(false);
       const supabase = getSupabaseBrowserClient();
       await supabase.auth.signOut();
       setIsLoginOpen(false);
-      setIsProfileOpen(false);
       setIsNicknameEditing(false);
       setProfileEditMessage("");
       setProfileUsername("");
@@ -1164,6 +1177,8 @@ export default function Home() {
       setLoginMessage("");
     } catch {
       // 로그아웃 실패 시에도 onAuthStateChange가 상태를 맞춤
+    } finally {
+      setIsLogoutSubmitting(false);
     }
   };
 
@@ -1715,8 +1730,13 @@ export default function Home() {
                     </div>
                   )}
                   {profileEditMessage ? <p className="profile-menu-message">{profileEditMessage}</p> : null}
-                  <button type="button" className="profile-menu-logout" onClick={submitLogout}>
-                    로그아웃
+                  <button
+                    type="button"
+                    className="profile-menu-logout"
+                    onClick={submitLogout}
+                    disabled={isLogoutSubmitting}
+                  >
+                    {isLogoutSubmitting ? "로그아웃 중..." : "로그아웃"}
                   </button>
                 </div>
               ) : null}
