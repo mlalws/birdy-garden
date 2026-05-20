@@ -12,6 +12,7 @@ type MapViewerEntry = {
   dateLabel: string;
   count: number;
   speciesName: string;
+  needsLocationFix?: boolean;
 };
 
 export type MapViewerPoint = {
@@ -29,9 +30,8 @@ type LocationMapProps = {
   zoom?: number;
   mode: "picker" | "viewer";
   theme?: "default" | "warm";
-  /** viewer: 지도 중심을 props 변경에 따라 강제 이동하지 않음 */
-  lockView?: boolean;
-  /** viewer: 현위치 표시 */
+  /** false면 지도를 만들지 않음(숨김 패널 레이아웃 깨짐 방지) */
+  active?: boolean;
   userLocation?: LatLng | null;
   selectedPoint?: LatLng | null;
   points?: MapViewerPoint[];
@@ -42,7 +42,6 @@ type LocationMapProps = {
   onEditPoint?: (pointId: string, entryId?: string) => void;
 };
 
-const PICKER_PIN_HTML = `<span class="bird-map-picker-pin" aria-hidden="true"></span>`;
 const USER_DOT_HTML = `<span class="bird-map-user-dot" aria-hidden="true"></span>`;
 
 const escapeHtml = (value: string) =>
@@ -52,6 +51,13 @@ const escapeHtml = (value: string) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+
+const buildPickerPinHtml = () => `<div class="bird-map-sight-pin" aria-hidden="true">
+  <span class="bird-map-sight-pin-head bird-map-sight-pin-head--picker">
+    <span class="bird-map-sight-pin-photo bird-map-sight-pin-photo--picker"></span>
+  </span>
+  <span class="bird-map-sight-pin-tip"></span>
+</div>`;
 
 const buildSightPinHtml = (imageSrc: string, selected: boolean) => {
   const safeSrc = escapeHtml(imageSrc);
@@ -71,13 +77,13 @@ const buildPopupHtml = (entries: MapViewerEntry[], totalCount: number) => {
     return `<div class="bird-map-popup"><p class="bird-map-popup-empty">기록 없음</p></div>`;
   }
   const rows = entries
-    .map(
-      (entry) =>
-        `<button type="button" class="bird-map-popup-row" data-entry-id="${escapeHtml(entry.id)}">
+    .map((entry) => {
+      const hint = entry.needsLocationFix ? " · 위치 미등록" : "";
+      return `<button type="button" class="bird-map-popup-row" data-entry-id="${escapeHtml(entry.id)}">
           <span class="bird-map-popup-date">${escapeHtml(entry.dateLabel)}</span>
-          <span class="bird-map-popup-meta">${entry.count}마리 · ${escapeHtml(entry.speciesName)}</span>
-        </button>`
-    )
+          <span class="bird-map-popup-meta">${entry.count}마리 · ${escapeHtml(entry.speciesName)}${hint}</span>
+        </button>`;
+    })
     .join("");
   return `<div class="bird-map-popup">
     <p class="bird-map-popup-summary">이 위치 · 총 ${totalCount}마리 · ${entries.length}회 관찰</p>
@@ -91,7 +97,7 @@ export function LocationMap({
   zoom = 16,
   mode,
   theme = "default",
-  lockView = false,
+  active = true,
   userLocation = null,
   selectedPoint = null,
   points = [],
@@ -106,7 +112,6 @@ export function LocationMap({
   const leafletRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
   const hasFittedRef = useRef(false);
-  const lastCenterKeyRef = useRef<string | null>(null);
   const onPickRef = useRef(onPick);
   const onSelectPointRef = useRef(onSelectPoint);
   const onSelectEntryRef = useRef(onSelectEntry);
@@ -119,7 +124,23 @@ export function LocationMap({
   onEditPointRef.current = onEditPoint;
   modeRef.current = mode;
 
+  const refreshMapView = () => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+    map.invalidateSize();
+    if (fitToPoints && points.length > 0 && modeRef.current === "viewer") {
+      return;
+    }
+    map.setView([center.lat, center.lng], map.getZoom() || zoom, { animate: false });
+  };
+
   useEffect(() => {
+    if (!active) {
+      return;
+    }
+
     let mounted = true;
     let map: any = null;
 
@@ -148,12 +169,9 @@ export function LocationMap({
         center: [center.lat, center.lng],
         zoom,
         zoomControl: true,
-        tap: false,
       });
 
-      const tileUrl = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-
-      L.tileLayer(tileUrl, {
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
         maxZoom: 19,
         attribution: "&copy; OpenStreetMap · CARTO",
       }).addTo(map);
@@ -164,10 +182,9 @@ export function LocationMap({
       }
 
       mapRef.current = map;
-      lastCenterKeyRef.current = `${center.lat.toFixed(5)},${center.lng.toFixed(5)}`;
-      requestAnimationFrame(() => {
-        map?.invalidateSize();
-      });
+      requestAnimationFrame(refreshMapView);
+      window.setTimeout(refreshMapView, 120);
+      window.setTimeout(refreshMapView, 400);
     })();
 
     return () => {
@@ -179,32 +196,28 @@ export function LocationMap({
       }
       layerRef.current = null;
       hasFittedRef.current = false;
-      lastCenterKeyRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active]);
 
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) {
+    if (!active) {
       return;
     }
-    if (fitToPoints && points.length > 0) {
-      return;
-    }
-    const centerKey = `${center.lat.toFixed(5)},${center.lng.toFixed(5)}`;
-    if (lockView && lastCenterKeyRef.current === centerKey) {
-      return;
-    }
-    map.setView([center.lat, center.lng], map.getZoom() || zoom, { animate: false });
-    lastCenterKeyRef.current = centerKey;
-  }, [center.lat, center.lng, fitToPoints, lockView, points.length, zoom]);
+    refreshMapView();
+    const t1 = window.setTimeout(refreshMapView, 80);
+    const t2 = window.setTimeout(refreshMapView, 320);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [active, center.lat, center.lng, fitToPoints, points.length, zoom]);
 
   useEffect(() => {
     const L = leafletRef.current;
     const map = mapRef.current;
     const layer = layerRef.current;
-    if (!L || !map || !layer) {
+    if (!active || !L || !map || !layer) {
       return;
     }
 
@@ -213,10 +226,10 @@ export function LocationMap({
     if (mode === "picker" && selectedPoint) {
       const marker = L.marker([selectedPoint.lat, selectedPoint.lng], {
         icon: L.divIcon({
-          className: "bird-map-picker-pin-wrap",
-          html: PICKER_PIN_HTML,
-          iconSize: [34, 46],
-          iconAnchor: [17, 42],
+          className: "bird-map-sight-pin-wrap",
+          html: buildPickerPinHtml(),
+          iconSize: [44, 64],
+          iconAnchor: [22, 64],
         }),
         interactive: false,
       });
@@ -304,7 +317,9 @@ export function LocationMap({
         hasFittedRef.current = true;
       }
     }
-  }, [fitToPoints, mode, points, selectedPoint, userLocation?.lat, userLocation?.lng]);
+
+    requestAnimationFrame(refreshMapView);
+  }, [active, fitToPoints, mode, points, selectedPoint, userLocation?.lat, userLocation?.lng]);
 
   const themeClass = theme === "warm" ? " bird-map-leaflet--warm" : "";
 

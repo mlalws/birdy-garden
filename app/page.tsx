@@ -56,6 +56,13 @@ import {
   speciesUsesSexSplit,
 } from "@/lib/species-catalog";
 import {
+  mergeArchiveRecordMapCoords,
+  mergeRecordMapCoords,
+  recordHasSavedMapCoord,
+  resolveRecordMapCoord,
+  saveRecordMapCoord,
+} from "@/lib/record-map-coords";
+import {
   applyRecordCountChange,
   collectSpeciesLabelsFromGarden,
   gardenPayloadNeedsMigration,
@@ -336,6 +343,7 @@ export default function Home() {
   const [isRankingLoading, setIsRankingLoading] = useState(false);
   const [rankingError, setRankingError] = useState("");
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [mapSession, setMapSession] = useState(0);
   const [mapCenter, setMapCenter] = useState<BirdPoint>(DEFAULT_MAP_CENTER);
   const [pickedLocation, setPickedLocation] = useState<BirdPoint | null>(null);
   const [selectedMapGroupId, setSelectedMapGroupId] = useState<string | null>(null);
@@ -440,16 +448,17 @@ export default function Home() {
   const mapGroups = useMemo<BirdMapGroup[]>(() => {
     const grouped = new Map<string, BirdMapGroup>();
     for (const record of allMapRecords) {
-      if (typeof record.latitude !== "number" || typeof record.longitude !== "number") {
+      const coord = resolveRecordMapCoord(record, mapCenter);
+      if (!coord) {
         continue;
       }
-      const key = `${record.latitude.toFixed(5)},${record.longitude.toFixed(5)}`;
+      const key = `${coord.lat.toFixed(5)},${coord.lng.toFixed(5)}`;
       const existing = grouped.get(key);
       if (!existing) {
         grouped.set(key, {
           id: key,
-          lat: record.latitude,
-          lng: record.longitude,
+          lat: coord.lat,
+          lng: coord.lng,
           totalCount: Math.max(1, record.count),
           records: [record],
         });
@@ -462,7 +471,7 @@ export default function Home() {
       ...group,
       records: [...group.records].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     }));
-  }, [allMapRecords]);
+  }, [allMapRecords, mapCenter]);
 
   const selectedMapGroup = useMemo(
     () => mapGroups.find((group) => group.id === selectedMapGroupId) ?? null,
@@ -504,6 +513,7 @@ export default function Home() {
             }),
             count: Math.max(1, record.count),
             speciesName: record.speciesName || record.name,
+            needsLocationFix: !recordHasSavedMapCoord(record),
           })),
         };
       }),
@@ -646,14 +656,16 @@ export default function Home() {
 
   const applyGardenPayload = (payload: UserGardenPayload) => {
     const migrated = migrateGardenPayload(payload);
-    setGardenBirds(normalizePlacedBirds(migrated.birds, migrated.records));
-    setBirdRecords(migrated.records);
+    const recordsWithMap = mergeRecordMapCoords(migrated.records);
+    const archivesWithMap = mergeArchiveRecordMapCoords(migrated.dailyArchives) ?? {};
+    setGardenBirds(normalizePlacedBirds(migrated.birds, recordsWithMap));
+    setBirdRecords(recordsWithMap);
     setCustomListBirds(migrated.customListBirds ?? []);
     setDexUnlockedSpecies(migrated.dexUnlockedSpecies ?? []);
     setDexSeenSpecies(migrated.dexSeenSpecies ?? []);
-    setDailyArchives(migrated.dailyArchives ?? {});
+    setDailyArchives(archivesWithMap);
     setCurrentGardenDate(migrated.currentGardenDate ?? getKstDateKey());
-    return migrated;
+    return { ...migrated, records: recordsWithMap, dailyArchives: archivesWithMap };
   };
 
   const clearLegacyGuestStorage = () => {
@@ -1441,9 +1453,13 @@ export default function Home() {
   };
 
   const openMap = () => {
+    setMapSession((prev) => prev + 1);
     setIsMapOpen(true);
     setIsMenuOpen(false);
-    captureCurrentLocation();
+    setSelectedMapGroupId(null);
+    setSelectedMapRecordId(null);
+    setEditingMapRecordId(null);
+    captureCurrentLocation(true);
   };
 
   const closeMap = () => {
@@ -1708,6 +1724,10 @@ export default function Home() {
           }
         : record
     );
+    if (mapEditLocation) {
+      saveRecordMapCoord(editingMapRecordId, mapEditLocation);
+    }
+
     markGardenDirty();
     setGardenBirds(nextBirds);
     setBirdRecords(nextRecords);
@@ -1785,6 +1805,10 @@ export default function Home() {
       speciesLabel.length > 0
         ? [...new Set([...dexUnlockedSpecies, speciesLabel])]
         : dexUnlockedSpecies;
+
+    const savedLat = pickedLocation?.lat ?? mapCenter.lat;
+    const savedLng = pickedLocation?.lng ?? mapCenter.lng;
+    saveRecordMapCoord(recordId, { lat: savedLat, lng: savedLng });
 
     markGardenDirty();
     setGardenBirds(nextBirds);
@@ -2793,6 +2817,8 @@ export default function Home() {
                 <h3 className="bird-map-title">발견 장소 설정</h3>
                 <div className="bird-map-frame">
                   <LocationMap
+                    key="map-registration-picker"
+                    active={isBirdInfoScreenOpen}
                     mode="picker"
                     theme="warm"
                     center={pickedLocation ?? mapCenter}
@@ -3105,8 +3131,11 @@ export default function Home() {
             <div className="bird-map-screen-body">
               <div className="bird-map-screen-map">
                 <LocationMap
+                  key={`map-viewer-${mapSession}`}
+                  active={isMapOpen}
                   mode="viewer"
                   theme="warm"
+                  zoom={15}
                   center={mapCenter}
                   userLocation={mapCenter}
                   points={mapViewerPoints}
@@ -3123,7 +3152,11 @@ export default function Home() {
                   onEditPoint={handleEditMapPoint}
                 />
                 {mapViewerPoints.length === 0 ? (
-                  <p className="bird-map-onmap-empty">발견 위치를 기록하면 지도에 핀이 표시돼요.</p>
+                  <p className="bird-map-onmap-empty">
+                    {birdRecords.length > 0
+                      ? "위치 권한을 허용한 뒤 새로고침하거나, 조류 추가 시 지도에서 핀을 찍어 주세요."
+                      : "발견 위치를 기록하면 지도에 핀이 표시돼요."}
+                  </p>
                 ) : null}
               </div>
 
@@ -3172,6 +3205,8 @@ export default function Home() {
                   </label>
                   <div className="bird-map-frame bird-map-frame--small">
                     <LocationMap
+                      key={`map-edit-${editingMapRecordId}`}
+                      active={!!editingMapRecordId}
                       mode="picker"
                       theme="warm"
                       center={mapEditLocation ?? mapCenter}
