@@ -30,7 +30,8 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     femaleImageSrc: "/gduck.png",
     femaleWaterImageSrc: "/wgduck.png",
     placement: "waterfowl",
-    listBlurb: "수컷은 녹색 머리를 가진 우리나라에서 가장 흔하게 보이는 오리입니다.",
+    listBlurb:
+      "머리가 반짝이는 녹색을 띠는 수컷이 유명하며, 우리 주변에서 가장 흔히 볼 수 있는 오리입니다.",
   },
   {
     id: "mandarin_duck",
@@ -40,7 +41,8 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     femaleImageSrc: "/gang.png",
     femaleWaterImageSrc: "/wgang.png",
     placement: "waterfowl",
-    listBlurb: "수컷 깃이 붉고 푸르게 번져 보일 만큼 화려한 연못의 물새입니다.",
+    listBlurb:
+      "수컷의 깃털이 눈부시게 화려하며, 문화적으로 부부금슬을 상징하는 아름다운 물새입니다.",
   },
   {
     id: "magpie",
