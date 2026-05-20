@@ -1,3 +1,8 @@
+import {
+  isLandSpecies,
+  isWaderSpecies,
+  shoreProbabilityForSpecies,
+} from "@/lib/species-catalog";
 import type { PlacedBird } from "@/lib/supabase/garden";
 
 export type BirdFacing = "left" | "right";
@@ -26,8 +31,11 @@ const WATER_SLOTS: Slot[] = [
   { xPercent: 88, yPercent: 86 },
 ];
 
-/** 까치 전용 (나무·언덕 위 고정 — 연못 구역과 겹치지 않는 우측 육지 위주) */
-const MAGPIE_SLOTS: Slot[] = [
+/** 육지·나무 쪽 (까치·참새·까마귀 등) */
+const LAND_SLOTS: Slot[] = [
+  { xPercent: 11, yPercent: 62 },
+  { xPercent: 20, yPercent: 58 },
+  { xPercent: 32, yPercent: 64 },
   { xPercent: 64, yPercent: 60 },
   { xPercent: 72, yPercent: 58 },
   { xPercent: 79, yPercent: 56 },
@@ -36,7 +44,7 @@ const MAGPIE_SLOTS: Slot[] = [
   { xPercent: 94, yPercent: 67 },
 ];
 
-/** 잔디(물 밖)인데 y가 이 구간이면 “위쪽 자리”로 보고 연안으로 끌어내리지 않음 (까치 등) */
+/** 잔디(물 밖)인데 y가 이 구간이면 “위쪽 자리”로 보고 연안으로 끌어내리지 않음 */
 const UPPER_SHORE_Y_MIN = 52;
 const UPPER_SHORE_Y_MAX = 70;
 
@@ -63,17 +71,20 @@ export function createGardenBirds(
   options?: { listBirdId?: string | null }
 ): PlacedBird[] {
   const stamp = Date.now();
-  const isMagpie = options?.listBirdId === "magpie";
+  const listBirdId = options?.listBirdId ?? null;
+  const onLand = isLandSpecies(listBirdId);
+  const onShore = onLand ? true : Math.random() < shoreProbabilityForSpecies(listBirdId);
+  const pool = onLand ? LAND_SLOTS : onShore ? SHORE_SLOTS : WATER_SLOTS;
+  const useUpperShoreBand = onLand || (onShore && isWaderSpecies(listBirdId));
+
   return Array.from({ length: count }, (_, idx) => {
     const seq = offset + idx;
-    const onShore = isMagpie ? true : Math.random() < 0.22;
-    const pool = isMagpie ? MAGPIE_SLOTS : onShore ? SHORE_SLOTS : WATER_SLOTS;
     const base = pool[seq % pool.length];
     const ring = Math.floor(seq / pool.length);
-    const xJitter = (ring % 2 === 0 ? 1 : -1) * Math.min(isMagpie ? 2 : 3, ring + 1);
+    const xJitter = (ring % 2 === 0 ? 1 : -1) * Math.min(onLand ? 2 : 3, ring + 1);
     const yJitter = ((seq + ring) % 3) - 1;
 
-    const yPercent = isMagpie
+    const yPercent = useUpperShoreBand
       ? clamp(base.yPercent + yJitter * 0.45, UPPER_SHORE_Y_MIN, UPPER_SHORE_Y_MAX)
       : onShore
         ? clamp(base.yPercent + yJitter * 0.35, 71, 79)
@@ -82,11 +93,11 @@ export function createGardenBirds(
     return {
       id: `garden-${stamp}-${seq}-${Math.random().toString(36).slice(2, 6)}`,
       recordId,
-      xPercent: clamp(base.xPercent + xJitter, isMagpie ? 6 : 8, 94),
+      xPercent: clamp(base.xPercent + xJitter, onLand ? 6 : 8, 94),
       yPercent,
       size: getBirdDisplaySize({ yPercent }),
       facing: pickFacing(),
-      inWater: isMagpie ? false : !onShore,
+      inWater: onLand ? false : !onShore,
     };
   });
 }
@@ -100,7 +111,6 @@ export function normalizePlacedBird(bird: PlacedBird): PlacedBird {
     if (wantsWater) {
       yPercent = 84 + (bird.xPercent % 5);
     } else if (yPercent >= UPPER_SHORE_Y_MIN) {
-      /** 물 밖 + 위쪽 자리는 그대로 (까치 배치). 그보다 위만 옛날 “하늘” 오리 연안으로 보정 */
       yPercent = clamp(yPercent, UPPER_SHORE_Y_MIN, UPPER_SHORE_Y_MAX);
     } else {
       yPercent = 75;

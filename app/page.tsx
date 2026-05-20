@@ -48,7 +48,9 @@ import {
   collectSpeciesSightings,
   findBirdRecordById,
   getSpeciesDexInfo,
+  KNOWN_DEX_SPECIES,
 } from "@/lib/garden-dex";
+import { LISTED_SPECIES } from "@/lib/species-catalog";
 import {
   collectSpeciesLabelsFromGarden,
   gardenPayloadNeedsMigration,
@@ -85,21 +87,13 @@ type ListBird = {
   isPlaceholder?: boolean;
 };
 
-const BIRD_LIST_ITEMS: ListBird[] = [
-  { id: "mallard", name: "청둥오리", imageSrc: "/duck.png" },
-  { id: "magpie", name: "까치", imageSrc: "/kachi.png" },
-  { id: "ph1", name: "", isPlaceholder: true },
-  { id: "ph2", name: "", isPlaceholder: true },
-  { id: "ph3", name: "", isPlaceholder: true },
-];
+const BIRD_LIST_ITEMS: ListBird[] = LISTED_SPECIES.map((species) => ({
+  id: species.id,
+  name: species.name,
+  imageSrc: species.imageSrc,
+}));
 
 const DEX_SLOT_COUNT = 15;
-
-/** 도감에 미리 정의된 조류 (추가해야 해금) */
-const KNOWN_DEX_SPECIES: { id: string; name: string; imageSrc: string }[] = [
-  { id: "mallard", name: "청둥오리", imageSrc: "/duck.png" },
-  { id: "magpie", name: "까치", imageSrc: "/kachi.png" },
-];
 
 type DexDisplayEntry = {
   id: string;

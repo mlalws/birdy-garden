@@ -1,18 +1,12 @@
 import { getRecordSpeciesLabel } from "@/lib/garden-daily";
+import {
+  KNOWN_SPECIES_NAME_SET,
+  LIST_SPECIES_BY_ID,
+  LISTED_SPECIES,
+  getListedSpeciesById,
+  getListedSpeciesByName,
+} from "@/lib/species-catalog";
 import type { BirdRecord, DailyGardenArchive, UserGardenPayload } from "@/lib/supabase/garden";
-
-/** 목록에서 고를 수 있는 조류 (placeholder 제외) */
-const LISTED_BIRDS = [
-  { id: "mallard", name: "청둥오리" },
-  { id: "magpie", name: "까치" },
-] as const;
-
-const KNOWN_SPECIES_NAMES = new Set(["청둥오리", "까치"]);
-
-const LIST_SPECIES_BY_ID: Record<string, string> = {
-  mallard: "청둥오리",
-  magpie: "까치",
-};
 
 /** 예전 빌드에서 저장된 별명 → 목록 종 */
 const LEGACY_NICKNAME_TO_LIST: Record<string, { speciesName: string; listBirdId: string }> = {
@@ -43,7 +37,7 @@ export function migrateBirdRecord(record: BirdRecord): BirdRecord {
     return { ...record, speciesName: legacy.speciesName, listBirdId: legacy.listBirdId };
   }
 
-  const listedByExactName = LISTED_BIRDS.find((item) => item.name === trimmedName);
+  const listedByExactName = LISTED_SPECIES.find((item) => item.name === trimmedName);
   if (listedByExactName) {
     return {
       ...record,
@@ -56,8 +50,13 @@ export function migrateBirdRecord(record: BirdRecord): BirdRecord {
     return { ...record, speciesName: "청둥오리", listBirdId: "mallard" };
   }
 
-  if (KNOWN_SPECIES_NAMES.has(trimmedName)) {
-    return { ...record, speciesName: trimmedName };
+  if (KNOWN_SPECIES_NAME_SET.has(trimmedName)) {
+    const listed = getListedSpeciesByName(trimmedName);
+    return {
+      ...record,
+      speciesName: trimmedName,
+      listBirdId: listed?.id,
+    };
   }
 
   return record;
@@ -95,7 +94,11 @@ const normalizeDexSpeciesLabel = (name: string): string | null => {
   if (trimmed.startsWith("청둥")) {
     return "청둥오리";
   }
-  return trimmed;
+  if (KNOWN_SPECIES_NAME_SET.has(trimmed)) {
+    return trimmed;
+  }
+  const listed = getListedSpeciesByName(trimmed);
+  return listed?.name ?? trimmed;
 };
 
 export function collectSpeciesLabelsFromGarden(

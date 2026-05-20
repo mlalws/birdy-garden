@@ -1,5 +1,6 @@
 import { getRecordSpeciesLabel } from "@/lib/garden-daily";
 import { migrateBirdRecord } from "@/lib/garden-records";
+import { LISTED_SPECIES, getListedSpeciesByName } from "@/lib/species-catalog";
 import type { BirdRecord, DailyGardenArchive } from "@/lib/supabase/garden";
 
 const KST_TIMEZONE = "Asia/Seoul";
@@ -26,12 +27,61 @@ export const SPECIES_DEX_CATALOG: SpeciesDexInfo[] = [
     description:
       "까치는 검은색과 흰색이 뚜렷한 대표적인 텃새입니다. 숲 가장자리·공원·마을 근처에서 쌍이나 작은 무리로 지내며, 울음소리로 영역을 알립니다. 땅에서 벌레와 씨를 찾아 먹고, 둥지는 나무 위 높은 가지에 짓습니다.",
   },
+  {
+    id: "sparrow",
+    name: "참새",
+    imageSrc: "/cham.png",
+    description:
+      "참새는 우리 주변에서 가장 흔한 작은 텃새입니다. 공원·마을·밭두렁에서 무리를 지어 뛰어다니며 씨앗과 곤충을 먹습니다. 짧고 가까운 짹짹 소리를 자주 내며, 사람과 가까운 거리에서도 쉽게 볼 수 있습니다.",
+  },
+  {
+    id: "crow",
+    name: "까마귀",
+    imageSrc: "/kamak.png",
+    description:
+      "까마귀는 크고 검은 깃의 똑똑한 조류입니다. 도시 골목, 산책로, 들판에서 까까 울음을 내며 활동합니다. 잡식성으로 먹이를 넓게 찾으며, 무리로 움직일 때도 있어 관찰하기 쉽습니다.",
+  },
+  {
+    id: "grey_heron",
+    name: "해오라기",
+    imageSrc: "/haeyo.png",
+    description:
+      "해오라기는 긴 다리와 부리를 가진 큰 물새입니다. 연못·하천·논두렁에서 조용히 서 있다가 물고기를 낚아챕니다. 회청색 깃과 느린 움직임이 특징이며, 우리나라 전역에서 널리 볼 수 있습니다.",
+  },
+  {
+    id: "egret",
+    name: "백로",
+    imageSrc: "/baeklo.png",
+    description:
+      "백로는 눈에 띄는 하얀 깃의 우아한 물새입니다. 얕은 물가·논·강변에서 한 마리씩 서서 먹이를 찾습니다. 부리와 다리가 길고, 천천히 걷거나 날아오르는 모습이 인상적입니다.",
+  },
+  {
+    id: "cattle_egret",
+    name: "왜가리",
+    imageSrc: "/whyga.png",
+    description:
+      "왜가리는 작고 흰색인 왜관목입니다. 논·들판·도로변에서 소나 농기구를 따라다니며 벌레를 잡아 먹기도 합니다. 오리·까치 등 다른 조류 옆에 붙어 먹이를 얻는 모습으로도 잘 알려져 있습니다.",
+  },
 ];
 
 const SPECIES_BY_NAME = new Map(SPECIES_DEX_CATALOG.map((item) => [item.name, item]));
 
 export function getSpeciesDexInfo(speciesName: string): SpeciesDexInfo | null {
-  return SPECIES_BY_NAME.get(speciesName.trim()) ?? null;
+  const trimmed = speciesName.trim();
+  const fromCatalog = SPECIES_BY_NAME.get(trimmed);
+  if (fromCatalog) {
+    return fromCatalog;
+  }
+  const listed = getListedSpeciesByName(trimmed);
+  if (!listed) {
+    return null;
+  }
+  return {
+    id: listed.id,
+    name: listed.name,
+    imageSrc: listed.imageSrc,
+    description: `${listed.name}에 대한 설명이 준비 중입니다.`,
+  };
 }
 
 export type SpeciesSightingEntry = {
@@ -128,3 +178,13 @@ export function findBirdRecordById(
 
   return null;
 }
+
+/** 도감 카드용 — catalog와 동기화 */
+export const KNOWN_DEX_SPECIES = LISTED_SPECIES.map((species) => {
+  const dex = SPECIES_DEX_CATALOG.find((item) => item.id === species.id);
+  return {
+    id: species.id,
+    name: species.name,
+    imageSrc: dex?.imageSrc ?? species.imageSrc,
+  };
+});

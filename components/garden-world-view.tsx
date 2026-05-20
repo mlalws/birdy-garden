@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { getBirdDisplaySize } from "@/lib/garden-birds";
+import { getSpriteSrcForRecord, isLandSpecies } from "@/lib/species-catalog";
 import type { BirdRecord, PlacedBird } from "@/lib/supabase/garden";
 
 const BACKGROUND_SRC = "/background.jpg";
@@ -15,9 +16,7 @@ type BgLayout = {
 };
 
 const FULL_BG_LAYOUT: BgLayout = { leftPct: 0, topPct: 0, widthPct: 100, heightPct: 100 };
-const DUCK_SHORE_SPRITE = "/duck.png";
-const DUCK_WATER_SPRITE = "/wduck.png";
-const MAGPIE_SPRITE = "/kachi.png";
+const DEFAULT_SPRITE = "/duck.png";
 
 /** object-fit: contain + left center 기준 실제 그려진 배경 영역 */
 function computeContainedImageLayout(
@@ -61,13 +60,6 @@ function mapBirdAnchorPosition(bird: PlacedBird, layout: BgLayout): { left: stri
   const left = layout.leftPct + (bird.xPercent / 100) * layout.widthPct;
   const top = layout.topPct + (bird.yPercent / 100) * layout.heightPct;
   return { left: `${left}%`, top: `${top}%` };
-}
-
-function isMagpieRecord(record: BirdRecord | undefined): boolean {
-  if (!record) {
-    return false;
-  }
-  return record.listBirdId === "magpie" || record.speciesName?.trim() === "까치";
 }
 
 type GardenWorldViewProps = {
@@ -191,13 +183,9 @@ export function GardenWorldView({
         {birds.map((bird) => {
           const isBubbleOpen = !readOnly && selectedBird?.id === bird.id;
           const record = bird.recordId ? recordById.get(bird.recordId) : undefined;
-          const isMagpie = isMagpieRecord(record);
-          const inWater = isMagpie ? false : bird.inWater !== false;
-          const birdSpriteSrc = isMagpie
-            ? MAGPIE_SPRITE
-            : inWater
-              ? DUCK_WATER_SPRITE
-              : DUCK_SHORE_SPRITE;
+          const inWater =
+            record && isLandSpecies(record.listBirdId) ? false : bird.inWater !== false;
+          const birdSpriteSrc = record ? getSpriteSrcForRecord(record, inWater) : DEFAULT_SPRITE;
           const displaySize = Math.max(8, Math.round(getBirdDisplaySize(bird) * birdSizeScale));
           const bubbleWidth = Math.min(200, Math.max(152, Math.round(displaySize * 2.6)));
           const anchorPos = mapBirdAnchorPosition(bird, isMini ? FULL_BG_LAYOUT : bgLayout);
