@@ -139,14 +139,15 @@ export function LocationMap({
         tap: false,
       });
 
+      /* Voyager: 건물(베이지·회색), 공원(연한 초록), 물(연한 파랑) 구분이 뚜렷한 타일 */
       const tileUrl =
         theme === "warm"
           ? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-          : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+          : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
 
       L.tileLayer(tileUrl, {
         maxZoom: 19,
-        attribution: theme === "warm" ? "&copy; OpenStreetMap · CARTO" : "&copy; OpenStreetMap contributors",
+        attribution: "&copy; OpenStreetMap · CARTO",
       }).addTo(map);
 
       layerRef.current = L.layerGroup().addTo(map);

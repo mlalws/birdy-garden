@@ -50,8 +50,9 @@ import {
   getSpeciesDexInfo,
   KNOWN_DEX_SPECIES,
 } from "@/lib/garden-dex";
-import { LISTED_SPECIES } from "@/lib/species-catalog";
+import { LISTED_SPECIES, speciesUsesSexSplit } from "@/lib/species-catalog";
 import {
+  applyRecordCountChange,
   collectSpeciesLabelsFromGarden,
   gardenPayloadNeedsMigration,
   migrateGardenPayload,
@@ -116,6 +117,11 @@ type BirdMapGroup = {
   totalCount: number;
   records: BirdRecord[];
 };
+
+/** 이날의 정원 닫을 때 돌아갈 화면 */
+type ArchiveGardenReturnTarget =
+  | { type: "calendar" }
+  | { type: "dex-detail"; speciesName: string };
 
 const LOCKED_DEX_IMAGE = "/qm.png";
 
@@ -229,12 +235,14 @@ export default function Home() {
   const [registrationSpeciesName, setRegistrationSpeciesName] = useState<string | null>(null);
   const [birdFeature, setBirdFeature] = useState("");
   const [birdCount, setBirdCount] = useState(1);
+  const [birdMaleCount, setBirdMaleCount] = useState(1);
+  const [birdFemaleCount, setBirdFemaleCount] = useState(0);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
   const [dexDetailSpecies, setDexDetailSpecies] = useState<string | null>(null);
   const [isDexDescPopupOpen, setIsDexDescPopupOpen] = useState(false);
   const [dexDescOverflows, setDexDescOverflows] = useState(false);
-  const dexDescTextRef = useRef<HTMLParagraphElement>(null);
+  const dexDescWrapRef = useRef<HTMLDivElement>(null);
   const [dexMenuRecordId, setDexMenuRecordId] = useState<string | null>(null);
   const [dexEditRecordId, setDexEditRecordId] = useState<string | null>(null);
   const [dexEditCount, setDexEditCount] = useState(1);
@@ -268,6 +276,9 @@ export default function Home() {
   const [gardenSyncError, setGardenSyncError] = useState("");
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isArchiveGardenOpen, setIsArchiveGardenOpen] = useState(false);
+  const [archiveGardenReturnTarget, setArchiveGardenReturnTarget] = useState<ArchiveGardenReturnTarget | null>(
+    null
+  );
   const [dailyArchives, setDailyArchives] = useState<Record<string, DailyGardenArchive>>({});
   const [currentGardenDate, setCurrentGardenDate] = useState(() => getKstDateKey());
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -661,11 +672,19 @@ export default function Home() {
       setDexDescOverflows(false);
       return;
     }
-    const el = dexDescTextRef.current;
+    const el = dexDescWrapRef.current;
     if (!el) {
       return;
     }
-    setDexDescOverflows(el.scrollHeight > el.clientHeight + 2);
+
+    const measure = () => {
+      setDexDescOverflows(el.scrollHeight > el.clientHeight + 2);
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [dexDetailDescription, dexDetailSpecies]);
 
   const loadGardenForUser = async (
@@ -958,9 +977,13 @@ export default function Home() {
     setBirdName("청둥오리");
     setBirdFeature("");
     setBirdCount(1);
+    setBirdMaleCount(1);
+    setBirdFemaleCount(0);
     setPhotoPreviewUrl(null);
     setPickedLocation(null);
   };
+
+  const registrationUsesSexSplit = speciesUsesSexSplit(selectedListBirdId);
 
   const captureCurrentLocation = (forcePin = false) => {
     if (typeof window === "undefined" || !navigator.geolocation) {
@@ -1025,6 +1048,8 @@ export default function Home() {
     setBirdName(nextName);
     setBirdFeature("");
     setBirdCount(1);
+    setBirdMaleCount(1);
+    setBirdFemaleCount(0);
     setPhotoPreviewUrl(null);
     setPickedLocation(null);
     captureCurrentLocation();
@@ -1119,7 +1144,7 @@ export default function Home() {
     setIsDexDescPopupOpen(false);
   };
 
-  const openArchiveGardenForDate = (dateKey: string) => {
+  const openArchiveGardenForDate = (dateKey: string, options?: { returnToDexSpecies?: string | null }) => {
     const snapshot = resolveDaySnapshot(dateKey, dailyArchives, { birds: gardenBirds, records: birdRecords });
     if (!snapshot || snapshot.birds.length === 0) {
       return;
@@ -1128,9 +1153,16 @@ export default function Home() {
     setSelectedCalendarDateKey(dateKey);
     setCalendarMonth({ year, month });
     setDexMenuRecordId(null);
-    setDexDetailSpecies(null);
     setDexEditRecordId(null);
+    setIsDexDescPopupOpen(false);
+    if (options?.returnToDexSpecies) {
+      setArchiveGardenReturnTarget({ type: "dex-detail", speciesName: options.returnToDexSpecies });
+    } else {
+      setArchiveGardenReturnTarget({ type: "calendar" });
+    }
+    setDexDetailSpecies(null);
     setIsDexOpen(false);
+    setIsCalendarOpen(false);
     setIsArchiveGardenOpen(true);
   };
 
@@ -1166,15 +1198,20 @@ export default function Home() {
         nextBirds = nextBirds.filter((bird) => !removeIds.has(bird.id));
       } else if (nextCount > existingBirdsForRecord.length) {
         const addCount = nextCount - existingBirdsForRecord.length;
-        const added = createGardenBirds(addCount, nextBirds.length, target.id, {
+        const added = createGardenBirds(nextBirds.length, target.id, {
           listBirdId: target.listBirdId,
           speciesName: target.speciesName,
+          ...(speciesUsesSexSplit(target.listBirdId)
+            ? { maleCount: addCount, femaleCount: 0 }
+            : { count: addCount }),
         });
         nextBirds = normalizePlacedBirds([...nextBirds, ...added], birdRecords);
       }
 
       const nextRecords = birdRecords.map((record) =>
-        record.id === dexEditRecordId ? { ...record, count: nextCount, feature: nextFeature } : record
+        record.id === dexEditRecordId
+          ? { ...applyRecordCountChange(record, nextCount), feature: nextFeature }
+          : record
       );
       markGardenDirty();
       setGardenBirds(nextBirds);
@@ -1309,12 +1346,25 @@ export default function Home() {
     if (!selectedDaySnapshot || selectedDaySnapshot.birds.length === 0) {
       return;
     }
+    setArchiveGardenReturnTarget({ type: "calendar" });
     setIsArchiveGardenOpen(true);
     setIsCalendarOpen(false);
   };
 
   const closeArchiveGarden = () => {
+    const returnTarget = archiveGardenReturnTarget;
     setIsArchiveGardenOpen(false);
+    setArchiveGardenReturnTarget(null);
+
+    if (returnTarget?.type === "dex-detail") {
+      setIsDexOpen(true);
+      setDexDetailSpecies(returnTarget.speciesName);
+      setDexMenuRecordId(null);
+      setDexEditRecordId(null);
+      setIsCalendarOpen(false);
+      return;
+    }
+
     setIsCalendarOpen(true);
   };
 
@@ -1486,9 +1536,12 @@ export default function Home() {
       nextBirds = nextBirds.filter((bird) => !removeIds.has(bird.id));
     } else if (nextCount > existingBirdsForRecord.length) {
       const addCount = nextCount - existingBirdsForRecord.length;
-      const added = createGardenBirds(addCount, nextBirds.length, target.id, {
+      const added = createGardenBirds(nextBirds.length, target.id, {
         listBirdId: target.listBirdId,
         speciesName: target.speciesName,
+        ...(speciesUsesSexSplit(target.listBirdId)
+          ? { maleCount: addCount, femaleCount: 0 }
+          : { count: addCount }),
       });
       nextBirds = normalizePlacedBirds([...nextBirds, ...added], birdRecords);
     }
@@ -1496,8 +1549,7 @@ export default function Home() {
     const nextRecords = birdRecords.map((record) =>
       record.id === editingMapRecordId
         ? {
-            ...record,
-            count: nextCount,
+            ...applyRecordCountChange(record, nextCount),
             feature: mapEditFeature.trim(),
             latitude: mapEditLocation?.lat,
             longitude: mapEditLocation?.lng,
@@ -1532,16 +1584,23 @@ export default function Home() {
 
   const submitBirdRegistration = async () => {
     const isUnlisted = birdRegistrationMode === "unlisted";
-    const amount = isUnlisted ? 1 : Math.max(1, birdCount);
+    const usesSexSplit = !isUnlisted && speciesUsesSexSplit(selectedListBirdId);
+    const maleCount = usesSexSplit ? Math.max(0, birdMaleCount) : 0;
+    const femaleCount = usesSexSplit ? Math.max(0, birdFemaleCount) : 0;
+    const amount = usesSexSplit ? maleCount + femaleCount : isUnlisted ? 1 : Math.max(1, birdCount);
+    if (amount < 1) {
+      return;
+    }
     const displayName = birdName.trim() || (isUnlisted ? "이름 없는 조류" : "청둥오리");
     const capturedPhoto = photoPreviewUrl;
     const recordId = `record-${Date.now()}`;
     const speciesNameForConfirm = isUnlisted
       ? displayName
       : registrationSpeciesName?.trim() || displayName;
-    const newBirds = createGardenBirds(amount, gardenBirds.length, recordId, {
+    const newBirds = createGardenBirds(gardenBirds.length, recordId, {
       listBirdId: selectedListBirdId,
       speciesName: speciesNameForConfirm,
+      ...(usesSexSplit ? { maleCount, femaleCount } : { count: amount }),
     });
     const newRecord: BirdRecord = {
       id: recordId,
@@ -1551,6 +1610,7 @@ export default function Home() {
       feature: birdFeature.trim(),
       photoUrl: capturedPhoto,
       count: amount,
+      ...(usesSexSplit ? { maleCount, femaleCount } : {}),
       latitude: pickedLocation?.lat,
       longitude: pickedLocation?.lng,
       createdAt: new Date().toISOString(),
@@ -2548,28 +2608,79 @@ export default function Home() {
                   aria-label="메모"
                 />
 
-                <div className="bird-count-wrap" aria-label="수량 설정">
-                  <div className="bird-count-row">
-                    <button
-                      type="button"
-                      className="bird-count-btn"
-                      onClick={() => setBirdCount((c) => Math.max(1, c - 1))}
-                      disabled={birdCount <= 1}
-                      aria-label="수량 줄이기"
-                    >
-                      −
-                    </button>
-                    <span className="bird-count-value">{birdCount}</span>
-                    <button
-                      type="button"
-                      className="bird-count-btn"
-                      onClick={() => setBirdCount((c) => c + 1)}
-                      aria-label="수량 늘리기"
-                    >
-                      +
-                    </button>
+                {registrationUsesSexSplit ? (
+                  <div className="bird-count-wrap bird-count-wrap--sex-split" aria-label="수컷·암컷 수량">
+                    <div className="bird-count-sex-group">
+                      <span className="bird-count-sex-label">수컷</span>
+                      <div className="bird-count-row">
+                        <button
+                          type="button"
+                          className="bird-count-btn"
+                          onClick={() => setBirdMaleCount((c) => Math.max(0, c - 1))}
+                          disabled={birdMaleCount <= 0}
+                          aria-label="수컷 줄이기"
+                        >
+                          −
+                        </button>
+                        <span className="bird-count-value">{birdMaleCount}</span>
+                        <button
+                          type="button"
+                          className="bird-count-btn"
+                          onClick={() => setBirdMaleCount((c) => c + 1)}
+                          aria-label="수컷 늘리기"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                    <div className="bird-count-sex-group">
+                      <span className="bird-count-sex-label">암컷</span>
+                      <div className="bird-count-row">
+                        <button
+                          type="button"
+                          className="bird-count-btn"
+                          onClick={() => setBirdFemaleCount((c) => Math.max(0, c - 1))}
+                          disabled={birdFemaleCount <= 0}
+                          aria-label="암컷 줄이기"
+                        >
+                          −
+                        </button>
+                        <span className="bird-count-value">{birdFemaleCount}</span>
+                        <button
+                          type="button"
+                          className="bird-count-btn"
+                          onClick={() => setBirdFemaleCount((c) => c + 1)}
+                          aria-label="암컷 늘리기"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="bird-count-wrap" aria-label="수량 설정">
+                    <div className="bird-count-row">
+                      <button
+                        type="button"
+                        className="bird-count-btn"
+                        onClick={() => setBirdCount((c) => Math.max(1, c - 1))}
+                        disabled={birdCount <= 1}
+                        aria-label="수량 줄이기"
+                      >
+                        −
+                      </button>
+                      <span className="bird-count-value">{birdCount}</span>
+                      <button
+                        type="button"
+                        className="bird-count-btn"
+                        onClick={() => setBirdCount((c) => c + 1)}
+                        aria-label="수량 늘리기"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <section className="bird-map-section" aria-label="발견 장소 설정">
@@ -2686,7 +2797,14 @@ export default function Home() {
         {isArchiveGardenOpen && archiveViewSnapshot ? (
           <div className="bird-archive-garden-screen" role="dialog" aria-modal="true" aria-label="이날의 정원">
             <header className="bird-archive-garden-header">
-              <button type="button" className="bird-archive-garden-back" onClick={closeArchiveGarden} aria-label="캘린더로 돌아가기">
+              <button
+                type="button"
+                className="bird-archive-garden-back"
+                onClick={closeArchiveGarden}
+                aria-label={
+                  archiveGardenReturnTarget?.type === "dex-detail" ? "도감 상세로 돌아가기" : "캘린더로 돌아가기"
+                }
+              >
                 <img src="/left.png" alt="" width={48} height={48} decoding="sync" className="bird-archive-garden-back-img" />
               </button>
               <h1 className="bird-archive-garden-title">
@@ -2999,6 +3117,7 @@ export default function Home() {
                       />
                     </div>
                     <div
+                      ref={dexDescWrapRef}
                       className={`bird-dex-detail-desc-wrap${dexDescOverflows ? " bird-dex-detail-desc-wrap--overflow" : ""}`}
                       role={dexDescOverflows ? "button" : undefined}
                       tabIndex={dexDescOverflows ? 0 : undefined}
@@ -3018,9 +3137,7 @@ export default function Home() {
                         }
                       }}
                     >
-                      <p ref={dexDescTextRef} className="bird-dex-detail-desc-text">
-                        {dexDetailDescription}
-                      </p>
+                      <p className="bird-dex-detail-desc-text">{dexDetailDescription}</p>
                       {dexDescOverflows ? (
                         <div className="bird-dex-detail-desc-fade" aria-hidden>
                           <span className="bird-dex-detail-desc-ellipsis">...</span>
@@ -3086,7 +3203,11 @@ export default function Home() {
                               <button
                                 type="button"
                                 role="menuitem"
-                                onClick={() => openArchiveGardenForDate(entry.dateKey)}
+                                onClick={() =>
+                                  openArchiveGardenForDate(entry.dateKey, {
+                                    returnToDexSpecies: dexDetailSpecies,
+                                  })
+                                }
                               >
                                 이날의 정원
                               </button>

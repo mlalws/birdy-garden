@@ -4,6 +4,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 export type { UserProfile } from "@/lib/profile";
 
 export type BirdFacing = "left" | "right";
+export type BirdSex = "male" | "female";
 
 export type PlacedBird = {
   id: string;
@@ -15,6 +16,8 @@ export type PlacedBird = {
   facing?: BirdFacing;
   /** 호수 안이면 다리 영역 클리핑 */
   inWater?: boolean;
+  /** 청둥오리·원앙 등 암수 구분 종 */
+  sex?: BirdSex;
 };
 
 export type BirdRecord = {
@@ -28,6 +31,9 @@ export type BirdRecord = {
   feature: string;
   photoUrl: string | null;
   count: number;
+  /** 청둥오리·원앙: 암수 마릿수 (count = maleCount + femaleCount) */
+  maleCount?: number;
+  femaleCount?: number;
   latitude?: number;
   longitude?: number;
   createdAt: string;
@@ -73,6 +79,8 @@ function normalizePayload(raw: unknown): UserGardenPayload {
         .map((item) => {
           const raw = item as PlacedBird;
           const facing: BirdFacing = raw.facing === "left" ? "left" : "right";
+          const sex: BirdSex | undefined =
+            raw.sex === "female" ? "female" : raw.sex === "male" ? "male" : undefined;
           return {
             id: raw.id,
             xPercent: raw.xPercent,
@@ -81,6 +89,7 @@ function normalizePayload(raw: unknown): UserGardenPayload {
             recordId: typeof raw.recordId === "string" ? raw.recordId : undefined,
             facing,
             inWater: raw.inWater === true,
+            sex,
           };
         })
     : [];
@@ -107,6 +116,14 @@ function normalizePayload(raw: unknown): UserGardenPayload {
             feature: typeof rawRecord.feature === "string" ? rawRecord.feature : "",
             photoUrl: typeof rawRecord.photoUrl === "string" ? rawRecord.photoUrl : null,
             count: typeof rawRecord.count === "number" ? rawRecord.count : 1,
+            maleCount:
+              typeof rawRecord.maleCount === "number" && rawRecord.maleCount >= 0
+                ? rawRecord.maleCount
+                : undefined,
+            femaleCount:
+              typeof rawRecord.femaleCount === "number" && rawRecord.femaleCount >= 0
+                ? rawRecord.femaleCount
+                : undefined,
             latitude:
               typeof rawRecord.latitude === "number" && Number.isFinite(rawRecord.latitude)
                 ? rawRecord.latitude
