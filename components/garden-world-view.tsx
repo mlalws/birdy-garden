@@ -6,6 +6,7 @@ import { getBirdDisplaySize } from "@/lib/garden-birds";
 import {
   getSpeciesSizeScaleForRecord,
   getSpriteSrcForPlacedBird,
+  recordMustStayOnLand,
   resolveBirdInWater,
 } from "@/lib/species-catalog";
 import type { BirdRecord, PlacedBird } from "@/lib/supabase/garden";
@@ -194,11 +195,12 @@ export function GardenWorldView({
           );
           const bubbleWidth = Math.min(200, Math.max(152, Math.round(displaySize * 2.6)));
           const anchorPos = mapBirdAnchorPosition(bird, isMini ? FULL_BG_LAYOUT : bgLayout);
+          const onLand = record ? recordMustStayOnLand(record) : false;
 
           return (
             <div
               key={bird.id}
-              className={`bird-anchor${isBubbleOpen ? " bird-anchor--open" : ""}`}
+              className={`bird-anchor${onLand ? " bird-anchor--on-land" : ""}${isBubbleOpen ? " bird-anchor--open" : ""}`}
               style={anchorPos}
             >
               {readOnly ? (

@@ -36,25 +36,25 @@ const WATER_SLOTS: Slot[] = [
   { xPercent: 88, yPercent: 86 },
 ];
 
-/** 나무·잔디 (까치·참새·까마귀) — 연못(파란 물) 위가 아닌 육지 */
+/** 나무·잔디 (까치·참새·까마귀) — 배경 기준 잔디선(약 50%) 위, 발 위치 */
 const LAND_SLOTS: Slot[] = [
-  { xPercent: 11, yPercent: 62 },
-  { xPercent: 20, yPercent: 58 },
-  { xPercent: 32, yPercent: 64 },
-  { xPercent: 64, yPercent: 60 },
-  { xPercent: 72, yPercent: 58 },
-  { xPercent: 79, yPercent: 56 },
-  { xPercent: 86, yPercent: 60 },
-  { xPercent: 90, yPercent: 64 },
-  { xPercent: 94, yPercent: 67 },
+  { xPercent: 10, yPercent: 56 },
+  { xPercent: 18, yPercent: 54 },
+  { xPercent: 28, yPercent: 58 },
+  { xPercent: 38, yPercent: 55 },
+  { xPercent: 48, yPercent: 57 },
+  { xPercent: 58, yPercent: 54 },
+  { xPercent: 70, yPercent: 58 },
+  { xPercent: 82, yPercent: 56 },
+  { xPercent: 92, yPercent: 59 },
 ];
 
-/** 화면 맨 위 하늘 — 배치 금지 */
-const SKY_Y_MAX = 48;
+/** 배경 이미지 상단 하늘(약 위 50%) — 배치 금지 */
+const SKY_Y_MAX = 49;
 
-/** 육지·나무 구역 (연못 시작 전) */
-const LAND_Y_MIN = 50;
-const LAND_Y_MAX = 69;
+/** 잔디·나무 발자국 (연못 파란 물 직전) */
+const LAND_Y_MIN = 52;
+const LAND_Y_MAX = 66;
 
 /** 연못 물가·물 (y ≥ 71 = 파란 연못 영역) */
 const SHORE_Y_MIN = 71;

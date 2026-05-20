@@ -160,6 +160,11 @@ select {
   z-index: 4;
 }
 
+/* 까치·참새·까마귀: y 좌표를 발 위치로 두고 잔디·나무 밑에 서게 */
+.bird-anchor--on-land {
+  transform: translate(-50%, -92%);
+}
+
 .bird-anchor--open {
   z-index: 22;
 }
