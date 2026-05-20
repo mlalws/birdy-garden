@@ -38,6 +38,7 @@ import {
   getKstDateKey,
   getRecordSpeciesLabel,
   parseDateKey,
+  repairGardenPayloadArchives,
   resolveDaySnapshot,
   shiftCalendarMonth,
   toDateKey,
@@ -517,21 +518,28 @@ export default function Home() {
     const loadSeq = ++gardenLoadSeqRef.current;
     setIsGardenSyncing(true);
     try {
-      const loaded = await loadUserGarden(uid);
+      const loaded = repairGardenPayloadArchives(await loadUserGarden(uid));
       const { payload: payloadAfterRollover, didRollover } = applyGardenDayRollover(loaded);
+      const hydratedPayload = repairGardenPayloadArchives(payloadAfterRollover);
       if (loadSeq !== gardenLoadSeqRef.current) {
         return;
       }
 
+      const needsRepairSave =
+        JSON.stringify(hydratedPayload.dailyArchives ?? {}) !==
+          JSON.stringify(payloadAfterRollover.dailyArchives ?? {}) ||
+        hydratedPayload.birds.length !== payloadAfterRollover.birds.length ||
+        hydratedPayload.records.length !== payloadAfterRollover.records.length;
+
       const sessionGuest = options?.mergeSessionGuestIfEmpty ? guestSessionPayloadRef.current : EMPTY_GARDEN_PAYLOAD;
-      if (payloadAfterRollover.birds.length === 0 && sessionGuest.birds.length > 0) {
+      if (hydratedPayload.birds.length === 0 && sessionGuest.birds.length > 0) {
         const merged: UserGardenPayload = {
           birds: sessionGuest.birds,
           records: sessionGuest.records,
           dexSeenSpecies: sessionGuest.dexSeenSpecies ?? [],
-          dailyArchives: { ...payloadAfterRollover.dailyArchives, ...sessionGuest.dailyArchives },
-          currentGardenDate: payloadAfterRollover.currentGardenDate ?? getKstDateKey(),
-          profile: payloadAfterRollover.profile,
+          dailyArchives: { ...hydratedPayload.dailyArchives, ...sessionGuest.dailyArchives },
+          currentGardenDate: hydratedPayload.currentGardenDate ?? getKstDateKey(),
+          profile: hydratedPayload.profile,
         };
         const migratedMerged = applyGardenPayload(merged);
         await saveUserGarden(uid, migratedMerged);
@@ -542,11 +550,11 @@ export default function Home() {
         gardenDirtyRef.current = false;
         return;
       }
-      const migratedPayload = applyGardenPayload(payloadAfterRollover);
+      const migratedPayload = applyGardenPayload(hydratedPayload);
       applyProfileDisplay(migratedPayload.profile ?? null, options?.emailFallback);
       loadedGardenUserIdRef.current = uid;
       setGardenSyncError("");
-      const needsSave = didRollover || gardenPayloadNeedsMigration(payloadAfterRollover);
+      const needsSave = didRollover || needsRepairSave || gardenPayloadNeedsMigration(hydratedPayload);
       if (needsSave) {
         await saveUserGarden(uid, migratedPayload);
         gardenDirtyRef.current = false;
@@ -1044,10 +1052,9 @@ export default function Home() {
     if (userId) {
       try {
         await persistGarden(userId, {
+          ...buildGardenPayloadFromSnapshot(),
           birds: nextBirds,
           records: nextRecords,
-          dexSeenSpecies,
-          ...(userProfile ? { profile: userProfile } : {}),
         });
       } catch (error) {
         reportGardenSyncError(error);
@@ -1113,12 +1120,9 @@ export default function Home() {
       if (userId) {
         try {
           await persistGarden(userId, {
+            ...buildGardenPayloadFromSnapshot(),
             birds: nextBirds,
             records: nextRecords,
-            dexSeenSpecies,
-            currentGardenDate,
-            dailyArchives,
-            ...(userProfile ? { profile: userProfile } : {}),
           });
         } catch (error) {
           reportGardenSyncError(error);

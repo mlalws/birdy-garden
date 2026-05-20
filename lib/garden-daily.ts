@@ -131,6 +131,78 @@ function normalizeArchives(raw: unknown): Record<string, DailyGardenArchive> {
   return result;
 }
 
+/** createdAt 기준으로 과거 날짜 기록을 dailyArchives로 되돌려 넣기 (저장 누락 복구) */
+export function repairGardenPayloadArchives(payload: UserGardenPayload): UserGardenPayload {
+  const today = getKstDateKey();
+  const archives: Record<string, DailyGardenArchive> = { ...(payload.dailyArchives ?? {}) };
+  const recordById = new Map<string, BirdRecord>();
+
+  const registerRecord = (record: BirdRecord) => {
+    const migrated = migrateBirdRecord(record);
+    recordById.set(migrated.id, migrated);
+    return migrated;
+  };
+
+  for (const record of payload.records) {
+    registerRecord(record);
+  }
+  for (const archive of Object.values(archives)) {
+    for (const record of archive.records) {
+      registerRecord(record);
+    }
+  }
+
+  const todayRecords: BirdRecord[] = [];
+  const todayBirds: PlacedBird[] = [];
+
+  for (const record of recordById.values()) {
+    const dateKey = record.createdAt ? getKstDateKey(new Date(record.createdAt)) : today;
+    if (dateKey === today) {
+      todayRecords.push(record);
+      continue;
+    }
+    if (!archives[dateKey]) {
+      archives[dateKey] = { birds: [], records: [], savedAt: new Date().toISOString() };
+    }
+    if (!archives[dateKey].records.some((item) => item.id === record.id)) {
+      archives[dateKey].records.push(record);
+    }
+  }
+
+  const allBirds = [...payload.birds, ...Object.values(archives).flatMap((archive) => archive.birds)];
+  const seenBirdIds = new Set<string>();
+
+  for (const bird of allBirds) {
+    if (seenBirdIds.has(bird.id)) {
+      continue;
+    }
+    seenBirdIds.add(bird.id);
+
+    const record = bird.recordId ? recordById.get(bird.recordId) : undefined;
+    const dateKey = record?.createdAt ? getKstDateKey(new Date(record.createdAt)) : today;
+
+    if (dateKey === today) {
+      todayBirds.push(bird);
+      continue;
+    }
+
+    if (!archives[dateKey]) {
+      archives[dateKey] = { birds: [], records: [], savedAt: new Date().toISOString() };
+    }
+    if (!archives[dateKey].birds.some((item) => item.id === bird.id)) {
+      archives[dateKey].birds.push(bird);
+    }
+  }
+
+  return {
+    ...payload,
+    birds: todayBirds,
+    records: todayRecords,
+    dailyArchives: archives,
+    currentGardenDate: today,
+  };
+}
+
 /** 자정이 지나면 전날 정원을 아카이브하고 오늘 정원을 비운다 */
 export function applyGardenDayRollover(payload: UserGardenPayload): {
   payload: UserGardenPayload;

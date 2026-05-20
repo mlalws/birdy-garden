@@ -160,12 +160,45 @@ export async function loadUserGarden(userId: string): Promise<UserGardenPayload>
   return normalizePayload(data.payload);
 }
 
+/** 부분 저장 시 dailyArchives 등이 사라지지 않도록 기존 payload와 합칩니다 */
+export function mergeGardenPayload(existing: UserGardenPayload, incoming: UserGardenPayload): UserGardenPayload {
+  return {
+    birds: incoming.birds,
+    records: incoming.records,
+    dexSeenSpecies:
+      incoming.dexSeenSpecies && incoming.dexSeenSpecies.length > 0
+        ? incoming.dexSeenSpecies
+        : (existing.dexSeenSpecies ?? []),
+    profile: incoming.profile ?? existing.profile,
+    currentGardenDate: incoming.currentGardenDate ?? existing.currentGardenDate ?? undefined,
+    dailyArchives: {
+      ...(existing.dailyArchives ?? {}),
+      ...(incoming.dailyArchives ?? {}),
+    },
+  };
+}
+
 export async function saveUserGarden(userId: string, payload: UserGardenPayload): Promise<void> {
   const supabase = getSupabaseBrowserClient();
+
+  let toSave = payload;
+  try {
+    const existing = await loadUserGarden(userId);
+    const hasExistingData =
+      existing.birds.length > 0 ||
+      existing.records.length > 0 ||
+      Object.keys(existing.dailyArchives ?? {}).length > 0;
+    if (hasExistingData) {
+      toSave = mergeGardenPayload(existing, payload);
+    }
+  } catch {
+    // 신규 사용자 등 — incoming 그대로 저장
+  }
+
   const { error } = await supabase.from("user_gardens").upsert(
     {
       user_id: userId,
-      payload,
+      payload: toSave,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id" }
