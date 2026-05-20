@@ -1090,7 +1090,7 @@ export default function Home() {
     setBirdRegistrationMode(mode);
     setIsBirdInfoScreenOpen(true);
     setIsPhotoPopupOpen(false);
-    setCanOpenPhotoPopup(!!opts?.photoUrl);
+    setCanOpenPhotoPopup(!opts?.photoUrl);
     setBirdName(nextName);
     setBirdFeature(opts?.feature ?? "");
     setBirdCount(1);
@@ -2538,7 +2538,7 @@ export default function Home() {
                     tabIndex={0}
                     onClick={togglePhotoPopupFromHit}
                     onKeyDown={onPhotoHitKeyDown}
-                    aria-label="사진 찍기"
+                    aria-label="사진 업로드하기"
                   >
                     {photoPreviewUrl ? (
                       <span className="bird-new-register-photo-preview-wrap">
@@ -2561,7 +2561,7 @@ export default function Home() {
                         />
                       </span>
                     ) : (
-                      <span className="bird-new-register-photo-label">사진 찍기</span>
+                      <span className="bird-new-register-photo-label">사진 업로드하기</span>
                     )}
                   </div>
                 </div>
@@ -2673,7 +2673,7 @@ export default function Home() {
                       tabIndex={0}
                       onClick={togglePhotoPopupFromHit}
                       onKeyDown={onPhotoHitKeyDown}
-                      aria-label="사진 찍기"
+                      aria-label="사진 업로드하기"
                     >
                       {photoPreviewUrl ? (
                         <span className="bird-photo-preview-wrap">
@@ -2692,7 +2692,7 @@ export default function Home() {
                           <img src={photoPreviewUrl} alt="선택한 새 사진 미리보기" className="bird-photo-preview" />
                         </span>
                       ) : (
-                        <span className="bird-photo-placeholder">사진 찍기</span>
+                        <span className="bird-photo-placeholder">사진 업로드하기</span>
                       )}
                     </div>
                   </div>
