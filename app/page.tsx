@@ -368,6 +368,17 @@ export default function Home() {
     return resolveDaySnapshot(selectedCalendarDateKey, dailyArchives, { birds: gardenBirds, records: birdRecords });
   }, [isArchiveGardenOpen, selectedCalendarDateKey, dailyArchives, gardenBirds, birdRecords]);
 
+  useLayoutEffect(() => {
+    if (!isArchiveGardenOpen) {
+      return;
+    }
+    const scrollEl = archiveScrollRef.current;
+    if (!scrollEl) {
+      return;
+    }
+    scrollEl.scrollLeft = 0;
+  }, [isArchiveGardenOpen, selectedCalendarDateKey, archiveViewSnapshot?.birds.length]);
+
   const calendarCells = useMemo(
     () => buildCalendarCells(calendarMonth.year, calendarMonth.month),
     [calendarMonth.year, calendarMonth.month]

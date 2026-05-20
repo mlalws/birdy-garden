@@ -128,7 +128,9 @@ export function GardenWorldView({
       return;
     }
 
-    const scrollEl = worldRef.current?.closest(".garden-scroll, .bird-calendar-preview") as HTMLElement | null;
+    const scrollEl = worldRef.current?.closest(
+      ".garden-scroll, .bird-archive-garden-scroll, .bird-calendar-preview"
+    ) as HTMLElement | null;
     if (!scrollEl) {
       return;
     }

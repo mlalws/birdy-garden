@@ -115,9 +115,9 @@ select {
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.14);
 }
 
-.phone-frame--overlay .garden-scroll,
-.phone-frame--overlay .add-bird-button,
-.phone-frame--overlay .profile-corner {
+.phone-frame--overlay > .garden-scroll,
+.phone-frame--overlay > .add-bird-button,
+.phone-frame--overlay > .profile-corner {
   display: none !important;
 }
 
@@ -755,7 +755,7 @@ select {
   margin: 0;
   font-size: 12px;
   font-weight: 500;
-  line-height: 1.35;
+  line-height: 1.5;
   color: #6b4425;
 }
 

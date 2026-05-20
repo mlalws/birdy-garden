@@ -1,5 +1,15 @@
-import { migrateBirdRecord } from "@/lib/garden-records";
+import { normalizePlacedBirds } from "@/lib/garden-birds";
+import { migrateBirdRecord, migrateBirdRecords } from "@/lib/garden-records";
 import type { BirdRecord, DailyGardenArchive, PlacedBird, UserGardenPayload } from "@/lib/supabase/garden";
+
+export function normalizeDaySnapshot(snapshot: DailyGardenArchive): DailyGardenArchive {
+  const records = migrateBirdRecords(snapshot.records);
+  return {
+    ...snapshot,
+    records,
+    birds: normalizePlacedBirds(snapshot.birds, records),
+  };
+}
 
 const KST_TIMEZONE = "Asia/Seoul";
 
@@ -258,9 +268,14 @@ export function resolveDaySnapshot(
     return null;
   }
   if (dateKey === today) {
-    return { birds: live.birds, records: live.records, savedAt: new Date().toISOString() };
+    return normalizeDaySnapshot({
+      birds: live.birds,
+      records: live.records,
+      savedAt: new Date().toISOString(),
+    });
   }
-  return archives[dateKey] ?? null;
+  const archived = archives[dateKey];
+  return archived ? normalizeDaySnapshot(archived) : null;
 }
 
 export function dateKeyHasGarden(

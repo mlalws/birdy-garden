@@ -3,6 +3,7 @@ import {
   getSpeciesSizeScale,
   getSpeciesSizeScaleForRecord,
   isLandSpecies,
+  isWaterAffinitySpecies,
   recordMustStayNearWater,
   recordMustStayOnLand,
   shoreProbabilityForSpecies,
@@ -157,32 +158,18 @@ export function isLandBirdPlacement(bird: Pick<PlacedBird, "xPercent" | "yPercen
 }
 
 function clampNearWaterBird(bird: PlacedBird, sizeScale = 1): PlacedBird {
-  const preferWater = Math.floor(bird.xPercent) % 3 !== 0;
-  let yPercent = bird.yPercent;
-  let inWater = bird.inWater === true;
-
-  const needsWaterZone = isSkyY(yPercent) || isLandPlacementZoneY(yPercent);
-
-  if (needsWaterZone) {
-    if (preferWater) {
-      yPercent = clamp(WATER_Y_MIN + (bird.xPercent % 10), WATER_Y_MIN, WATER_Y_MAX);
-      inWater = true;
-    } else {
-      yPercent = clamp(SHORE_Y_MIN + (bird.xPercent % 8), SHORE_Y_MIN, SHORE_Y_MAX);
-      inWater = false;
-    }
-  } else if (yPercent >= WATER_Y_MIN) {
-    yPercent = clamp(yPercent, WATER_Y_MIN, WATER_Y_MAX);
-    inWater = true;
-  } else {
-    yPercent = clamp(yPercent, SHORE_Y_MIN, SHORE_Y_MAX);
-    inWater = false;
-  }
+  const slotIndex = Math.floor(bird.xPercent) + Math.floor(bird.yPercent);
+  const base = WATER_SLOTS[slotIndex % WATER_SLOTS.length];
+  const ring = Math.floor(slotIndex / WATER_SLOTS.length);
+  const xJitter = (ring % 2 === 0 ? 1 : -1) * Math.min(2, ring);
+  const yJitter = (slotIndex % 3) - 1;
+  const yPercent = clamp(base.yPercent + yJitter * 0.35, WATER_Y_MIN, WATER_Y_MAX);
 
   return {
     ...bird,
+    xPercent: clamp(base.xPercent + xJitter, 8, 94),
     yPercent,
-    inWater,
+    inWater: true,
     size: getBirdDisplaySize({ yPercent }, sizeScale),
   };
 }
@@ -206,7 +193,11 @@ function createOneGardenBird(
   const onLand = resolveOnLandPlacement(listBirdId, speciesName);
   const sizeScale = getSpeciesSizeScale(listBirdId, speciesName);
   const speciesIdForShore = listBirdId ?? getListedSpeciesByName(speciesName ?? "")?.id ?? null;
-  const onShore = onLand ? false : Math.random() < shoreProbabilityForSpecies(speciesIdForShore);
+  const onShore = onLand
+    ? false
+    : isWaterAffinitySpecies(speciesIdForShore)
+      ? false
+      : Math.random() < shoreProbabilityForSpecies(speciesIdForShore);
 
   if (onLand) {
     const slot = pickLandSlot(seq);
