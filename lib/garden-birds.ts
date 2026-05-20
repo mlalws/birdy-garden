@@ -36,25 +36,32 @@ const WATER_SLOTS: Slot[] = [
   { xPercent: 88, yPercent: 86 },
 ];
 
-/** 나무·잔디 (까치·참새·까마귀) — 배경 지평선(약 50%) 아래 잔디·언덕 */
-const LAND_SLOTS: Slot[] = [
-  { xPercent: 10, yPercent: 61 },
-  { xPercent: 18, yPercent: 63 },
-  { xPercent: 28, yPercent: 65 },
-  { xPercent: 38, yPercent: 62 },
-  { xPercent: 48, yPercent: 64 },
-  { xPercent: 58, yPercent: 63 },
-  { xPercent: 70, yPercent: 66 },
-  { xPercent: 82, yPercent: 62 },
-  { xPercent: 92, yPercent: 65 },
+/** 왼쪽 나무 가지·잎 (하늘색 배경이어도 나무 위면 허용) */
+const LAND_TREE_SLOTS: Slot[] = [
+  { xPercent: 7, yPercent: 54 },
+  { xPercent: 11, yPercent: 50 },
+  { xPercent: 14, yPercent: 57 },
+  { xPercent: 9, yPercent: 48 },
 ];
 
-/** 배경 이미지 상단 하늘(약 위 50%) — 배치 금지 */
+/** 잔디 바닥만 — 지평선(약 50%) 아래 초록 잔디 (가운데·오른쪽 하늘 금지) */
+const LAND_GROUND_SLOTS: Slot[] = [
+  { xPercent: 24, yPercent: 68 },
+  { xPercent: 34, yPercent: 66 },
+  { xPercent: 44, yPercent: 69 },
+  { xPercent: 54, yPercent: 67 },
+  { xPercent: 64, yPercent: 68 },
+  { xPercent: 74, yPercent: 66 },
+  { xPercent: 84, yPercent: 69 },
+  { xPercent: 93, yPercent: 67 },
+];
+
+/** 배경 이미지 상단 맨 하늘 — 배치 금지 */
 const SKY_Y_MAX = 58;
 
-/** 잔디·나무 발자국 (지평선 아래 초록 잔디) */
-export const LAND_Y_MIN = 60;
-export const LAND_Y_MAX = 70;
+/** 잔디 바닥 발 위치 */
+export const LAND_GROUND_Y_MIN = 66;
+export const LAND_GROUND_Y_MAX = 72;
 
 /** 연못 물가·물 (y ≥ 71 = 파란 연못 영역) */
 const SHORE_Y_MIN = 71;
@@ -99,8 +106,9 @@ function isSkyY(yPercent: number): boolean {
   return yPercent <= SKY_Y_MAX;
 }
 
-function isLandTreeY(yPercent: number): boolean {
-  return yPercent >= LAND_Y_MIN && yPercent <= LAND_Y_MAX;
+/** 육지·나무 슬롯 (물가 종이 잘못 들어온 경우 연못으로 보냄) */
+function isLandPlacementZoneY(yPercent: number): boolean {
+  return yPercent >= 46 && yPercent <= LAND_GROUND_Y_MAX;
 }
 
 /** 연못 물가·물 안 (파란색 배경) */
@@ -108,17 +116,41 @@ function isWaterZoneY(yPercent: number): boolean {
   return yPercent >= SHORE_Y_MIN;
 }
 
-function clampLandYPercent(bird: Pick<PlacedBird, "xPercent" | "yPercent">): number {
-  if (bird.yPercent >= LAND_Y_MIN && bird.yPercent <= LAND_Y_MAX) {
-    return bird.yPercent;
+function pickLandSlot(slotIndex: number): Slot {
+  if (slotIndex % 4 === 0) {
+    return LAND_TREE_SLOTS[Math.floor(slotIndex / 4) % LAND_TREE_SLOTS.length];
   }
-  const slot = LAND_SLOTS[Math.floor(bird.xPercent) % LAND_SLOTS.length];
-  return clamp(slot.yPercent, LAND_Y_MIN, LAND_Y_MAX);
+  return LAND_GROUND_SLOTS[slotIndex % LAND_GROUND_SLOTS.length];
 }
 
-/** 육지 좌표·비물 영역 — 발 기준 앵커 적용 */
-export function isLandBirdPlacement(bird: Pick<PlacedBird, "yPercent" | "inWater">): boolean {
-  return bird.inWater !== true && bird.yPercent >= LAND_Y_MIN && bird.yPercent <= LAND_Y_MAX;
+function snapLandBirdToSlot(bird: PlacedBird, slotIndex: number, sizeScale = 1): PlacedBird {
+  const slot = pickLandSlot(slotIndex);
+  const yPercent = slot.yPercent;
+  return {
+    ...bird,
+    xPercent: slot.xPercent,
+    yPercent,
+    inWater: false,
+    size: getBirdDisplaySize({ yPercent }, sizeScale),
+  };
+}
+
+/** 나무 가지·잎 위 */
+export function isLandTreePlacement(bird: Pick<PlacedBird, "xPercent" | "yPercent" | "inWater">): boolean {
+  return (
+    bird.inWater !== true &&
+    bird.xPercent < 22 &&
+    bird.yPercent >= 46 &&
+    bird.yPercent < LAND_GROUND_Y_MIN
+  );
+}
+
+/** 잔디 바닥 또는 나무 */
+export function isLandBirdPlacement(bird: Pick<PlacedBird, "xPercent" | "yPercent" | "inWater">): boolean {
+  if (bird.inWater === true) {
+    return false;
+  }
+  return isLandTreePlacement(bird) || (bird.yPercent >= LAND_GROUND_Y_MIN && bird.yPercent <= LAND_GROUND_Y_MAX);
 }
 
 function clampNearWaterBird(bird: PlacedBird, sizeScale = 1): PlacedBird {
@@ -126,7 +158,7 @@ function clampNearWaterBird(bird: PlacedBird, sizeScale = 1): PlacedBird {
   let yPercent = bird.yPercent;
   let inWater = bird.inWater === true;
 
-  const needsWaterZone = isSkyY(yPercent) || isLandTreeY(yPercent);
+  const needsWaterZone = isSkyY(yPercent) || isLandPlacementZoneY(yPercent);
 
   if (needsWaterZone) {
     if (preferWater) {
@@ -172,22 +204,36 @@ function createOneGardenBird(
   const sizeScale = getSpeciesSizeScale(listBirdId, speciesName);
   const speciesIdForShore = listBirdId ?? getListedSpeciesByName(speciesName ?? "")?.id ?? null;
   const onShore = onLand ? false : Math.random() < shoreProbabilityForSpecies(speciesIdForShore);
-  const pool = onLand ? LAND_SLOTS : onShore ? SHORE_SLOTS : WATER_SLOTS;
+
+  if (onLand) {
+    const slot = pickLandSlot(seq);
+    const yPercent = slot.yPercent;
+    return {
+      id: `garden-${stamp}-${seq}-${Math.random().toString(36).slice(2, 6)}`,
+      recordId,
+      xPercent: slot.xPercent,
+      yPercent,
+      size: getBirdDisplaySize({ yPercent }, sizeScale),
+      facing: pickFacing(),
+      inWater: false,
+      sex,
+    };
+  }
+
+  const pool = onShore ? SHORE_SLOTS : WATER_SLOTS;
   const base = pool[seq % pool.length];
   const ring = Math.floor(seq / pool.length);
-  const xJitter = (ring % 2 === 0 ? 1 : -1) * Math.min(onLand ? 2 : 3, ring + 1);
+  const xJitter = (ring % 2 === 0 ? 1 : -1) * Math.min(3, ring + 1);
   const yJitter = ((seq + ring) % 3) - 1;
 
-  const yPercent = onLand
-    ? clamp(base.yPercent + yJitter * 0.45, LAND_Y_MIN, LAND_Y_MAX)
-    : onShore
-      ? clamp(base.yPercent + yJitter * 0.35, SHORE_Y_MIN, SHORE_Y_MAX)
-      : clamp(base.yPercent + yJitter * 0.35, WATER_Y_MIN, WATER_Y_MAX);
+  const yPercent = onShore
+    ? clamp(base.yPercent + yJitter * 0.35, SHORE_Y_MIN, SHORE_Y_MAX)
+    : clamp(base.yPercent + yJitter * 0.35, WATER_Y_MIN, WATER_Y_MAX);
 
   return {
     id: `garden-${stamp}-${seq}-${Math.random().toString(36).slice(2, 6)}`,
     recordId,
-    xPercent: clamp(base.xPercent + xJitter, onLand ? 6 : 8, 94),
+    xPercent: clamp(base.xPercent + xJitter, 8, 94),
     yPercent,
     size: getBirdDisplaySize({ yPercent }, sizeScale),
     facing: pickFacing(),
@@ -286,16 +332,6 @@ export function normalizePlacedBird(
   const forceNearWater = options?.forceNearWater ?? false;
   const sizeScale = getSpeciesSizeScaleForRecord(options?.record);
 
-  if (forceLand) {
-    const yPercent = clampLandYPercent(bird);
-    return {
-      ...bird,
-      yPercent,
-      inWater: false,
-      size: getBirdDisplaySize({ yPercent }, sizeScale),
-    };
-  }
-
   if (forceNearWater) {
     return clampNearWaterBird(bird, sizeScale);
   }
@@ -303,7 +339,7 @@ export function normalizePlacedBird(
   const wantsWater = bird.inWater === true;
   let yPercent = bird.yPercent;
 
-  if (isSkyY(yPercent) || isLandTreeY(yPercent)) {
+  if (isSkyY(yPercent) || isLandPlacementZoneY(yPercent)) {
     if (wantsWater) {
       yPercent = clamp(WATER_Y_MIN + (bird.xPercent % 10), WATER_Y_MIN, WATER_Y_MAX);
     } else {
@@ -323,12 +359,32 @@ export function normalizePlacedBird(
   };
 }
 
+function isLikelyFloatingLandBird(bird: PlacedBird): boolean {
+  if (bird.inWater === true) {
+    return false;
+  }
+  if (bird.yPercent >= LAND_GROUND_Y_MIN) {
+    return false;
+  }
+  if (isLandTreePlacement(bird)) {
+    return false;
+  }
+  return bird.yPercent <= SKY_Y_MAX || (bird.xPercent >= 20 && bird.yPercent < LAND_GROUND_Y_MIN);
+}
+
 export function normalizePlacedBirds(birds: PlacedBird[], records: BirdRecord[] = []): PlacedBird[] {
   const recordById = new Map(records.map((record) => [record.id, record]));
+  let landSlotIndex = 0;
   const normalized = birds.map((bird) => {
     const record = bird.recordId ? recordById.get(bird.recordId) : undefined;
+    const forceLand = recordMustStayOnLand(record) || isLikelyFloatingLandBird(bird);
+    if (forceLand) {
+      const snapped = snapLandBirdToSlot(bird, landSlotIndex, getSpeciesSizeScaleForRecord(record));
+      landSlotIndex += 1;
+      return snapped;
+    }
     return normalizePlacedBird(bird, {
-      forceLand: recordMustStayOnLand(record),
+      forceLand: false,
       forceNearWater: recordMustStayNearWater(record),
       record,
     });
