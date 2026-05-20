@@ -10,10 +10,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
-  // Vercel `next build`가 ESLint 오류로 실패하면 배포가 멈추고, 링크에는 예전 빌드만 보입니다.
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
