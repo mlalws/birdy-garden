@@ -166,7 +166,8 @@ const buildDexDisplayEntries = (
       imageSrc: species.imageSrc,
       unlocked,
       isNew: unlocked && !seen.has(species.name),
-      photoUrl: unlocked ? getSpeciesPhotoFromRecords(records, species.name) : null,
+      /** 목록 도감 종(청둥오리 등) — 등록 사진이 아닌 catalog imageSrc 고정 */
+      photoUrl: null,
     };
   });
 
