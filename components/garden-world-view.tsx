@@ -23,6 +23,16 @@ type BgLayout = {
 const FULL_BG_LAYOUT: BgLayout = { leftPct: 0, topPct: 0, widthPct: 100, heightPct: 100 };
 const DEFAULT_SPRITE = "/duck.png";
 
+function BirdSpriteImage({ src, className }: { src: string; className: string }) {
+  if (src.startsWith("data:") || src.startsWith("blob:")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={src} alt="" className={className} draggable={false} />
+    );
+  }
+  return <Image src={src} alt="" fill sizes="64px" className={className} />;
+}
+
 /** object-fit: contain + left center 기준 실제 그려진 배경 영역 */
 function computeContainedImageLayout(
   containerW: number,
@@ -212,7 +222,7 @@ export function GardenWorldView({
                   aria-hidden
                 >
                   <span className="bird-sprite">
-                    <Image src={birdSpriteSrc} alt="" fill sizes="64px" className="bird-sprite-img" />
+                    <BirdSpriteImage src={birdSpriteSrc} className="bird-sprite-img" />
                   </span>
                 </div>
               ) : (
@@ -225,7 +235,7 @@ export function GardenWorldView({
                   aria-expanded={isBubbleOpen}
                 >
                   <span className="bird-sprite">
-                    <Image src={birdSpriteSrc} alt="" fill sizes="64px" className="bird-sprite-img" />
+                    <BirdSpriteImage src={birdSpriteSrc} className="bird-sprite-img" />
                   </span>
                 </button>
               )}

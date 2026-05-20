@@ -50,7 +50,7 @@ import {
   getSpeciesDexInfo,
   KNOWN_DEX_SPECIES,
 } from "@/lib/garden-dex";
-import { LISTED_SPECIES, speciesUsesSexSplit } from "@/lib/species-catalog";
+import { LISTED_SPECIES, isCustomListBirdId, speciesUsesSexSplit } from "@/lib/species-catalog";
 import {
   applyRecordCountChange,
   collectSpeciesLabelsFromGarden,
@@ -71,6 +71,7 @@ import {
   loadUserGarden,
   saveUserGarden,
   type BirdRecord,
+  type CustomListBird,
   type DailyGardenArchive,
   type PlacedBird,
   type UserGardenPayload,
@@ -85,14 +86,25 @@ type ListBird = {
   id: string;
   name: string;
   imageSrc?: string;
+  listBlurb?: string;
   isPlaceholder?: boolean;
+  isCustom?: boolean;
 };
 
 const BIRD_LIST_ITEMS: ListBird[] = LISTED_SPECIES.map((species) => ({
   id: species.id,
   name: species.name,
   imageSrc: species.imageSrc,
+  listBlurb: species.listBlurb,
 }));
+
+const truncateListBlurb = (text: string, maxLen = 80) => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return "직접 등록한 조류";
+  }
+  return trimmed.length <= maxLen ? trimmed : `${trimmed.slice(0, maxLen)}…`;
+};
 
 const DEX_SLOT_COUNT = 15;
 
@@ -251,6 +263,7 @@ export default function Home() {
   const [dexSeenSpecies, setDexSeenSpecies] = useState<string[]>([]);
   const [gardenBirds, setGardenBirds] = useState<PlacedBird[]>([]);
   const [birdRecords, setBirdRecords] = useState<BirdRecord[]>([]);
+  const [customListBirds, setCustomListBirds] = useState<CustomListBird[]>([]);
   const [isGardenHydrated, setIsGardenHydrated] = useState(false);
   const [isGardenSyncing, setIsGardenSyncing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -315,12 +328,27 @@ export default function Home() {
   const gardenSnapshotRef = useRef({
     gardenBirds,
     birdRecords,
+    customListBirds,
     dexUnlockedSpecies,
     dexSeenSpecies,
     userProfile,
     dailyArchives,
     currentGardenDate,
   });
+
+  const displayBirdListItems = useMemo<ListBird[]>(
+    () => [
+      ...BIRD_LIST_ITEMS,
+      ...customListBirds.map((custom) => ({
+        id: custom.id,
+        name: custom.name,
+        imageSrc: custom.imageSrc,
+        listBlurb: truncateListBlurb(custom.description),
+        isCustom: true,
+      })),
+    ],
+    [customListBirds]
+  );
 
   const todayDateKey = getKstDateKey();
 
@@ -567,6 +595,7 @@ export default function Home() {
     const migrated = migrateGardenPayload(payload);
     setGardenBirds(normalizePlacedBirds(migrated.birds, migrated.records));
     setBirdRecords(migrated.records);
+    setCustomListBirds(migrated.customListBirds ?? []);
     setDexUnlockedSpecies(migrated.dexUnlockedSpecies ?? []);
     setDexSeenSpecies(migrated.dexSeenSpecies ?? []);
     setDailyArchives(migrated.dailyArchives ?? {});
@@ -596,17 +625,19 @@ export default function Home() {
     gardenSnapshotRef.current = {
       gardenBirds,
       birdRecords,
+      customListBirds,
       dexUnlockedSpecies,
       dexSeenSpecies,
       userProfile,
       dailyArchives,
       currentGardenDate,
     };
-  }, [gardenBirds, birdRecords, dexUnlockedSpecies, dexSeenSpecies, userProfile, dailyArchives, currentGardenDate]);
+  }, [gardenBirds, birdRecords, customListBirds, dexUnlockedSpecies, dexSeenSpecies, userProfile, dailyArchives, currentGardenDate]);
 
   const buildGardenPayloadFromSnapshot = (snapshot = gardenSnapshotRef.current): UserGardenPayload => ({
     birds: snapshot.gardenBirds,
     records: snapshot.birdRecords,
+    customListBirds: snapshot.customListBirds ?? [],
     dexUnlockedSpecies: snapshot.dexUnlockedSpecies,
     dexSeenSpecies: snapshot.dexSeenSpecies,
     currentGardenDate: snapshot.currentGardenDate ?? getKstDateKey(),
@@ -1030,6 +1061,8 @@ export default function Home() {
     name?: string;
     mode?: "listed" | "unlisted";
     listBirdId?: string | null;
+    photoUrl?: string | null;
+    feature?: string;
   }) => {
     const mode = opts?.mode ?? "listed";
     const nextName =
@@ -1044,13 +1077,13 @@ export default function Home() {
     setBirdRegistrationMode(mode);
     setIsBirdInfoScreenOpen(true);
     setIsPhotoPopupOpen(false);
-    setCanOpenPhotoPopup(true);
+    setCanOpenPhotoPopup(!!opts?.photoUrl);
     setBirdName(nextName);
-    setBirdFeature("");
+    setBirdFeature(opts?.feature ?? "");
     setBirdCount(1);
     setBirdMaleCount(1);
     setBirdFemaleCount(0);
-    setPhotoPreviewUrl(null);
+    setPhotoPreviewUrl(opts?.photoUrl ?? null);
     setPickedLocation(null);
     captureCurrentLocation();
   };
@@ -1060,11 +1093,58 @@ export default function Home() {
   };
 
   const goNextFromBirdList = () => {
-    const item = BIRD_LIST_ITEMS.find((b) => b.id === selectedListBirdId);
+    const item = displayBirdListItems.find((b) => b.id === selectedListBirdId);
     if (!item || item.isPlaceholder) {
       return;
     }
+    const custom = customListBirds.find((entry) => entry.id === item.id);
+    if (custom) {
+      openBirdRegistration({
+        name: custom.name,
+        mode: "listed",
+        listBirdId: custom.id,
+        photoUrl: custom.imageSrc,
+        feature: custom.description,
+      });
+      return;
+    }
     openBirdRegistration({ name: item.name, mode: "listed", listBirdId: item.id });
+  };
+
+  const persistCustomListBirds = async (nextCustom: CustomListBird[]) => {
+    markGardenDirty();
+    const payload = { ...buildGardenPayloadFromSnapshot(), customListBirds: nextCustom };
+    if (userId) {
+      try {
+        await persistGarden(userId, payload);
+      } catch (error) {
+        reportGardenSyncError(error);
+      }
+    } else {
+      guestSessionPayloadRef.current = payload;
+    }
+  };
+
+  const submitCustomBirdToList = () => {
+    const name = birdName.trim();
+    if (!name || !photoPreviewUrl) {
+      return;
+    }
+    const entry: CustomListBird = {
+      id: `custom-${Date.now()}`,
+      name,
+      description: birdFeature.trim(),
+      imageSrc: photoPreviewUrl,
+      createdAt: new Date().toISOString(),
+    };
+    const nextCustom = [...customListBirds, entry];
+    setCustomListBirds(nextCustom);
+    setIsBirdInfoScreenOpen(false);
+    resetBirdFormDraft();
+    setRegistrationSpeciesName(name);
+    setIsBirdListOpen(true);
+    setSelectedListBirdId(entry.id);
+    void persistCustomListBirds(nextCustom);
   };
 
   const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -1584,21 +1664,27 @@ export default function Home() {
 
   const submitBirdRegistration = async () => {
     const isUnlisted = birdRegistrationMode === "unlisted";
-    const usesSexSplit = !isUnlisted && speciesUsesSexSplit(selectedListBirdId);
+    const customEntry = isCustomListBirdId(selectedListBirdId)
+      ? customListBirds.find((entry) => entry.id === selectedListBirdId)
+      : undefined;
+    const usesSexSplit = !isUnlisted && !customEntry && speciesUsesSexSplit(selectedListBirdId);
     const maleCount = usesSexSplit ? Math.max(0, birdMaleCount) : 0;
     const femaleCount = usesSexSplit ? Math.max(0, birdFemaleCount) : 0;
     const amount = usesSexSplit ? maleCount + femaleCount : isUnlisted ? 1 : Math.max(1, birdCount);
     if (amount < 1) {
       return;
     }
-    const displayName = birdName.trim() || (isUnlisted ? "이름 없는 조류" : "청둥오리");
-    const capturedPhoto = photoPreviewUrl;
+    const displayName =
+      birdName.trim() || customEntry?.name || (isUnlisted ? "이름 없는 조류" : "청둥오리");
+    const capturedPhoto = customEntry?.imageSrc ?? photoPreviewUrl;
     const recordId = `record-${Date.now()}`;
-    const speciesNameForConfirm = isUnlisted
-      ? displayName
-      : registrationSpeciesName?.trim() || displayName;
+    const speciesNameForConfirm = customEntry
+      ? customEntry.name
+      : isUnlisted
+        ? displayName
+        : registrationSpeciesName?.trim() || displayName;
     const newBirds = createGardenBirds(gardenBirds.length, recordId, {
-      listBirdId: selectedListBirdId,
+      listBirdId: isUnlisted ? undefined : selectedListBirdId,
       speciesName: speciesNameForConfirm,
       ...(usesSexSplit ? { maleCount, femaleCount } : { count: amount }),
     });
@@ -1607,7 +1693,7 @@ export default function Home() {
       name: displayName,
       speciesName: speciesNameForConfirm,
       listBirdId: isUnlisted ? undefined : selectedListBirdId ?? undefined,
-      feature: birdFeature.trim(),
+      feature: birdFeature.trim() || customEntry?.description || "",
       photoUrl: capturedPhoto,
       count: amount,
       ...(usesSexSplit ? { maleCount, femaleCount } : {}),
@@ -1620,7 +1706,7 @@ export default function Home() {
     const previousSightings = countLifetimeSpeciesSightings(birdRecords, dailyArchives, speciesNameForConfirm);
     const totalSightings = countLifetimeSpeciesSightings(nextRecords, dailyArchives, speciesNameForConfirm);
     const isFirstDiscovery = previousSightings === 0;
-    const fallbackImageSrc = getSpeciesFallbackImageSrc(speciesNameForConfirm);
+    const fallbackImageSrc = customEntry?.imageSrc ?? getSpeciesFallbackImageSrc(speciesNameForConfirm);
 
     const speciesLabel = speciesNameForConfirm.trim();
     const nextUnlocked =
@@ -2294,7 +2380,7 @@ export default function Home() {
             </header>
 
             <div className="bird-list-scroll">
-              {BIRD_LIST_ITEMS.map((item) =>
+              {displayBirdListItems.map((item) =>
                 item.isPlaceholder ? (
                   <div key={item.id} className="bird-list-card bird-list-card--placeholder" aria-hidden>
                     <div className="bird-list-thumb bird-list-thumb--muted">
@@ -2317,21 +2403,25 @@ export default function Home() {
                   >
                     <div className="bird-list-thumb">
                       {item.imageSrc ? (
-                        <Image
-                          src={item.imageSrc}
-                          alt={item.name}
-                          fill
-                          sizes="72px"
-                          className="bird-list-thumb-img"
-                        />
+                        item.imageSrc.startsWith("data:") || item.imageSrc.startsWith("blob:") ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.imageSrc} alt={item.name} className="bird-list-thumb-img" />
+                        ) : (
+                          <Image
+                            src={item.imageSrc}
+                            alt={item.name}
+                            fill
+                            sizes="72px"
+                            className="bird-list-thumb-img"
+                          />
+                        )
                       ) : (
                         <span>새 사진</span>
                       )}
                     </div>
                     <div className="bird-list-text">
                       <span className="bird-list-name">{item.name}</span>
-                      <span className="bird-list-line" />
-                      <span className="bird-list-line bird-list-line--short" />
+                      {item.listBlurb ? <p className="bird-list-blurb">{item.listBlurb}</p> : null}
                     </div>
                   </button>
                 )
@@ -2343,7 +2433,10 @@ export default function Home() {
                 type="button"
                 className="bird-list-next"
                 onClick={goNextFromBirdList}
-                disabled={!selectedListBirdId || !!BIRD_LIST_ITEMS.find((b) => b.id === selectedListBirdId)?.isPlaceholder}
+                disabled={
+                  !selectedListBirdId ||
+                  !!displayBirdListItems.find((b) => b.id === selectedListBirdId)?.isPlaceholder
+                }
               >
                 다음으로
               </button>
@@ -2394,7 +2487,7 @@ export default function Home() {
             <input
               ref={galleryInputRef}
               type="file"
-              accept="image/*"
+              accept="image/png,image/jpeg,image/webp,image/*"
               className="sr-only"
               aria-hidden
               tabIndex={-1}
@@ -2479,7 +2572,7 @@ export default function Home() {
                   aria-label="설명 입력"
                 />
 
-                <button type="button" className="bird-new-register-submit" onClick={submitBirdRegistration}>
+                <button type="button" className="bird-new-register-submit" onClick={submitCustomBirdToList}>
                   목록에 추가하기
                 </button>
               </div>

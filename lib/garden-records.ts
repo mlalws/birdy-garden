@@ -257,6 +257,7 @@ export function migrateGardenPayload(payload: UserGardenPayload): UserGardenPayl
     records,
     birds: normalizePlacedBirds(payload.birds, records),
     dailyArchives,
+    customListBirds: payload.customListBirds ?? [],
     dexUnlockedSpecies: migrateDexUnlockedSpecies(
       payload.dexUnlockedSpecies,
       payload.dexSeenSpecies,

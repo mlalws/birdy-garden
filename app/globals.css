@@ -206,6 +206,13 @@ select {
   pointer-events: none;
 }
 
+.bird-sprite > img.bird-sprite-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .bird--facing-left .bird-sprite-img {
   transform: scaleX(-1);
 }
@@ -710,6 +717,12 @@ select {
 .bird-list-thumb-img {
   object-fit: contain;
   padding: 4px;
+  box-sizing: border-box;
+}
+
+.bird-list-thumb > img.bird-list-thumb-img {
+  width: 100%;
+  height: 100%;
 }
 
 .bird-list-thumb--muted {
@@ -723,13 +736,25 @@ select {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .bird-list-name {
   font-size: 16px;
   font-weight: 700;
   color: #3f2615;
+}
+
+.bird-list-blurb {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: #6b4425;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .bird-list-line {
@@ -1893,9 +1918,9 @@ select {
   border-top-color: #9a2233;
 }
 
-/* Voyager 타일의 연한 파랑(물)·연한 초록(공원) 색을 유지하면서 대비만 살짝 강화 */
+/* Voyager: 물·공원 색은 유지, 건물은 더 진한 갈색으로 */
 .bird-map-leaflet--warm .leaflet-tile-pane {
-  filter: saturate(1.28) contrast(1.1) brightness(1.04);
+  filter: saturate(1.2) contrast(1.14) sepia(0.28) hue-rotate(6deg) brightness(0.9);
 }
 
 .bird-map-leaflet--warm .leaflet-control-zoom a {

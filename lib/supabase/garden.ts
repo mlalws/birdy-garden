@@ -45,12 +45,23 @@ export type DailyGardenArchive = {
   savedAt: string;
 };
 
+/** 신규 조류 등록 → 추가하기 목록에만 먼저 올라가는 사용자 정의 종 */
+export type CustomListBird = {
+  id: string;
+  name: string;
+  description: string;
+  imageSrc: string;
+  createdAt: string;
+};
+
 export type UserGardenPayload = {
   birds: PlacedBird[];
   records: BirdRecord[];
   /** 한 번이라도 발견해 도감에 해금된 종 (기록 삭제 후에도 유지) */
   dexUnlockedSpecies?: string[];
   dexSeenSpecies?: string[];
+  /** 신규 조류 등록으로 만든 목록 항목 */
+  customListBirds?: CustomListBird[];
   profile?: UserProfile;
   /** KST YYYY-MM-DD — 오늘 라이브 정원이 속한 날 */
   currentGardenDate?: string;
@@ -179,7 +190,27 @@ function normalizePayload(raw: unknown): UserGardenPayload {
     }
   }
 
-  return { birds, records, dexUnlockedSpecies, dexSeenSpecies, profile, currentGardenDate, dailyArchives };
+  const customListBirds = Array.isArray((obj as { customListBirds?: unknown }).customListBirds)
+    ? (obj as { customListBirds: unknown[] }).customListBirds
+        .filter(
+          (item): item is CustomListBird =>
+            !!item &&
+            typeof item === "object" &&
+            typeof (item as CustomListBird).id === "string" &&
+            typeof (item as CustomListBird).name === "string" &&
+            typeof (item as CustomListBird).imageSrc === "string"
+        )
+        .map((item) => ({
+          id: item.id,
+          name: item.name.trim() || "이름 없는 조류",
+          description: typeof item.description === "string" ? item.description : "",
+          imageSrc: item.imageSrc,
+          createdAt:
+            typeof item.createdAt === "string" ? item.createdAt : new Date().toISOString(),
+        }))
+    : [];
+
+  return { birds, records, dexUnlockedSpecies, dexSeenSpecies, customListBirds, profile, currentGardenDate, dailyArchives };
 }
 
 export async function loadUserGarden(userId: string): Promise<UserGardenPayload> {
@@ -208,6 +239,9 @@ export function mergeGardenPayload(existing: UserGardenPayload, incoming: UserGa
       ...(existing.dailyArchives ?? {}),
       ...(incoming.dailyArchives ?? {}),
     },
+    customListBirds: [...(existing.customListBirds ?? []), ...(incoming.customListBirds ?? [])].filter(
+      (item, index, arr) => arr.findIndex((other) => other.id === item.id) === index
+    ),
   };
 }
 

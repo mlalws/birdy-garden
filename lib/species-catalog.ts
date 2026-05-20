@@ -14,6 +14,8 @@ export type ListedSpecies = {
   /** 암수 구분 종 — 연못 안 */
   femaleWaterImageSrc?: string;
   placement: SpeciesPlacement;
+  /** 등록 목록 카드용 한 줄 요약 */
+  listBlurb: string;
 };
 
 /** 등록 화면에서 수컷·암컷 마릿수를 따로 받는 종 */
@@ -28,6 +30,7 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     femaleImageSrc: "/gduck.png",
     femaleWaterImageSrc: "/wgduck.png",
     placement: "waterfowl",
+    listBlurb: "수컷 녹색 머리·암컷 갈색 위장. 연못·강에서 가장 흔한 오리.",
   },
   {
     id: "mandarin_duck",
@@ -37,16 +40,36 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     femaleImageSrc: "/gang.png",
     femaleWaterImageSrc: "/wgang.png",
     placement: "waterfowl",
+    listBlurb: "수컷의 붉고 푸른 화려한 깃. 연못·하천을 오가는 대표 물새.",
   },
-  { id: "magpie", name: "까치", imageSrc: "/kachi.png", placement: "land" },
-  { id: "sparrow", name: "참새", imageSrc: "/cham.png", placement: "land" },
-  { id: "crow", name: "까마귀", imageSrc: "/kamak.png", placement: "land" },
+  {
+    id: "magpie",
+    name: "까치",
+    imageSrc: "/kachi.png",
+    placement: "land",
+    listBlurb: "검은·흰 깃이 선명해요. 마을·공원에서 울며 영역을 알립니다.",
+  },
+  {
+    id: "sparrow",
+    name: "참새",
+    imageSrc: "/cham.png",
+    placement: "land",
+    listBlurb: "가장 흔한 작은 텃새. 짹짹거리며 사람 가까이 뛰어다녀요.",
+  },
+  {
+    id: "crow",
+    name: "까마귀",
+    imageSrc: "/kamak.png",
+    placement: "land",
+    listBlurb: "크고 검은 깃의 똑똑한 잡식가. 까까 울며 도시·들에서 자주 봐요.",
+  },
   {
     id: "grey_heron",
     name: "해오라기",
     imageSrc: "/haeyo.png",
     waterImageSrc: "/whaeyo.png",
     placement: "wader",
+    listBlurb: "긴 다리·부리. 연못가에서 가만히 서 있다가 물고기를 낚아채요.",
   },
   {
     id: "egret",
@@ -54,6 +77,7 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     imageSrc: "/baeklo.png",
     waterImageSrc: "/wbaeklo.png",
     placement: "wader",
+    listBlurb: "새하얀 깃과 긴 다리. 물가에서 천천히 걷는 모습이 인상적이에요.",
   },
   {
     id: "cattle_egret",
@@ -61,6 +85,7 @@ export const LISTED_SPECIES: ListedSpecies[] = [
     imageSrc: "/whyga.png",
     waterImageSrc: "/wwhyga.png",
     placement: "wader",
+    listBlurb: "작은 흰 물새. 논·들에서 소나 농기구 옆 벌레를 잡아 먹어요.",
   },
 ];
 
@@ -72,6 +97,10 @@ export const LIST_SPECIES_BY_ID: Record<string, string> = Object.fromEntries(
 );
 
 export const KNOWN_SPECIES_NAME_SET = new Set(LISTED_SPECIES.map((species) => species.name));
+
+export function isCustomListBirdId(listBirdId: string | null | undefined): boolean {
+  return !!listBirdId && listBirdId.startsWith("custom-");
+}
 
 export function getListedSpeciesById(id: string | null | undefined): ListedSpecies | null {
   if (!id) {
@@ -139,6 +168,9 @@ export function getSpriteSrcForPlacedBird(
   record: BirdRecord | undefined,
   inWater: boolean
 ): string {
+  if (record?.photoUrl && isCustomListBirdId(record.listBirdId)) {
+    return record.photoUrl;
+  }
   const species = getListedSpeciesByRecord(record);
   const sex: BirdSex = bird.sex === "female" ? "female" : "male";
   return getSpeciesSpriteSrc(species, inWater, sex);
@@ -279,6 +311,9 @@ export function resolveBirdInWater(
 export function recordMustStayOnLand(record: BirdRecord | null | undefined): boolean {
   if (!record) {
     return false;
+  }
+  if (isCustomListBirdId(record.listBirdId)) {
+    return true;
   }
   if (record.listBirdId && isLandSpecies(record.listBirdId)) {
     return true;

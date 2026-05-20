@@ -92,6 +92,9 @@ export function getBirdDisplaySize(
 }
 
 function resolveOnLandPlacement(listBirdId: string | null | undefined, speciesName?: string | null): boolean {
+  if (listBirdId?.startsWith("custom-")) {
+    return true;
+  }
   if (isLandSpecies(listBirdId)) {
     return true;
   }
