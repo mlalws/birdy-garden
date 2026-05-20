@@ -302,7 +302,16 @@ export function recordMustStayNearWater(record: BirdRecord | null | undefined): 
   return WATER_AFFINITY_NAMES.has(label);
 }
 
-/** 화면용 inWater — 물 전용 종은 y 좌표로 w* 스프라이트 여부를 확정 */
+/** waterfowl(청둥오리·원앙 등) — y 기준 물/잔디 스프라이트 */
+export function isWaterfowlRecord(record: BirdRecord | null | undefined): boolean {
+  if (!record) {
+    return false;
+  }
+  const species = getListedSpeciesByRecord(record);
+  return species?.placement === "waterfowl";
+}
+
+/** 화면용 inWater — 푸른 연못(y≥80)이면 w*, 초록 잔디·물가(y<80)이면 duck/g* */
 export function resolveBirdInWater(
   bird: Pick<PlacedBird, "yPercent" | "inWater">,
   record?: BirdRecord | null
@@ -310,7 +319,7 @@ export function resolveBirdInWater(
   if (record && recordMustStayOnLand(record)) {
     return false;
   }
-  if (record && recordMustStayNearWater(record)) {
+  if (record && (recordMustStayNearWater(record) || isWaterfowlRecord(record))) {
     return birdIsInWaterZone(bird);
   }
   return bird.inWater === true;

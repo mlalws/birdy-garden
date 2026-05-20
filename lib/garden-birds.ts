@@ -4,6 +4,7 @@ import {
   getSpeciesSizeScaleForRecord,
   isLandSpecies,
   isWaterAffinitySpecies,
+  birdIsInWaterZone,
   recordMustStayNearWater,
   recordMustStayOnLand,
   shoreProbabilityForSpecies,
@@ -174,6 +175,62 @@ function clampNearWaterBird(bird: PlacedBird, sizeScale = 1): PlacedBird {
   };
 }
 
+/** 청둥오리·원앙 — 푸른 물(y≥80)은 w*, 초록 잔디·물가(y<80)는 duck/g* */
+function normalizeWaterAffinityBird(bird: PlacedBird, sizeScale = 1): PlacedBird {
+  let yPercent = bird.yPercent;
+
+  if (birdIsInWaterZone(bird)) {
+    yPercent = clamp(yPercent, WATER_Y_MIN, WATER_Y_MAX);
+    return {
+      ...bird,
+      yPercent,
+      inWater: true,
+      size: getBirdDisplaySize({ yPercent }, sizeScale),
+    };
+  }
+
+  if (yPercent >= SHORE_Y_MIN && yPercent <= SHORE_Y_MAX) {
+    yPercent = clamp(yPercent, SHORE_Y_MIN, SHORE_Y_MAX);
+    return {
+      ...bird,
+      yPercent,
+      inWater: false,
+      size: getBirdDisplaySize({ yPercent }, sizeScale),
+    };
+  }
+
+  if (isLandPlacementZoneY(yPercent)) {
+    yPercent = clamp(SHORE_Y_MIN + (bird.xPercent % 7), SHORE_Y_MIN, SHORE_Y_MAX);
+    return {
+      ...bird,
+      yPercent,
+      inWater: false,
+      size: getBirdDisplaySize({ yPercent }, sizeScale),
+    };
+  }
+
+  if (isSkyY(yPercent)) {
+    return clampNearWaterBird(bird, sizeScale);
+  }
+
+  return {
+    ...bird,
+    yPercent,
+    inWater: false,
+    size: getBirdDisplaySize({ yPercent }, sizeScale),
+  };
+}
+
+function syncWaterfowlSpriteFlag(bird: PlacedBird, record?: BirdRecord): PlacedBird {
+  if (!record || !recordMustStayNearWater(record)) {
+    return bird;
+  }
+  return {
+    ...bird,
+    inWater: birdIsInWaterZone(bird),
+  };
+}
+
 export type CreateGardenBirdsOptions = {
   listBirdId?: string | null;
   speciesName?: string | null;
@@ -327,7 +384,7 @@ export function normalizePlacedBird(
   const sizeScale = getSpeciesSizeScaleForRecord(options?.record);
 
   if (forceNearWater) {
-    return clampNearWaterBird(bird, sizeScale);
+    return normalizeWaterAffinityBird(bird, sizeScale);
   }
 
   const wantsWater = bird.inWater === true;
@@ -345,12 +402,13 @@ export function normalizePlacedBird(
     yPercent = clamp(yPercent, SHORE_Y_MIN, SHORE_Y_MAX);
   }
 
-  return {
+  const next = {
     ...bird,
     yPercent,
     inWater: wantsWater,
     size: getBirdDisplaySize({ yPercent }, sizeScale),
   };
+  return syncWaterfowlSpriteFlag(next, options?.record);
 }
 
 function isLikelyFloatingLandBird(bird: PlacedBird): boolean {
@@ -377,11 +435,12 @@ export function normalizePlacedBirds(birds: PlacedBird[], records: BirdRecord[] 
       landSlotIndex += 1;
       return snapped;
     }
-    return normalizePlacedBird(bird, {
+    const placed = normalizePlacedBird(bird, {
       forceLand: false,
       forceNearWater: recordMustStayNearWater(record),
       record,
     });
+    return syncWaterfowlSpriteFlag(placed, record);
   });
   return assignSexToGardenBirds(normalized, records);
 }

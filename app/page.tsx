@@ -47,7 +47,7 @@ import {
 import {
   collectSpeciesSightings,
   findBirdRecordById,
-  getSpeciesDexInfo,
+  getDexDetailDisplay,
   KNOWN_DEX_SPECIES,
 } from "@/lib/garden-dex";
 import {
@@ -741,9 +741,16 @@ export default function Home() {
     [birdRecords, dailyArchives, dexUnlockedSpecies, dexSeenSpecies]
   );
 
-  const dexDetailInfo = useMemo(
-    () => (dexDetailSpecies ? getSpeciesDexInfo(dexDetailSpecies) : null),
-    [dexDetailSpecies]
+  const dexDetailDisplay = useMemo(
+    () =>
+      dexDetailSpecies
+        ? getDexDetailDisplay(dexDetailSpecies, {
+            records: birdRecords,
+            archives: dailyArchives,
+            customListBirds,
+          })
+        : null,
+    [dexDetailSpecies, birdRecords, dailyArchives, customListBirds]
   );
 
   const dexDetailSightings = useMemo(() => {
@@ -758,10 +765,10 @@ export default function Home() {
       return "";
     }
     return (
-      dexDetailInfo?.description ??
+      dexDetailDisplay?.description ??
       `${dexDetailSpecies}에 대한 설명이 아직 준비되지 않았어요. 발견 기록을 쌓아 도감을 채워 보세요.`
     );
-  }, [dexDetailInfo?.description, dexDetailSpecies]);
+  }, [dexDetailDisplay?.description, dexDetailSpecies]);
 
   useLayoutEffect(() => {
     if (!dexDetailSpecies) {
@@ -3250,13 +3257,24 @@ export default function Home() {
                 <div className="bird-dex-detail-scroll" onClick={(event) => event.stopPropagation()}>
                   <div className="bird-dex-detail-top">
                     <div className="bird-dex-detail-photo">
-                      <Image
-                        src={dexDetailInfo?.imageSrc ?? getSpeciesFallbackImageSrc(dexDetailSpecies)}
-                        alt={dexDetailSpecies}
-                        fill
-                        sizes="160px"
-                        className="bird-dex-detail-photo-img"
-                      />
+                      {dexDetailDisplay &&
+                      (dexDetailDisplay.imageSrc.startsWith("data:") ||
+                        dexDetailDisplay.imageSrc.startsWith("blob:")) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={dexDetailDisplay.imageSrc}
+                          alt={dexDetailSpecies}
+                          className="bird-dex-detail-photo-img bird-dex-detail-photo-img--uploaded"
+                        />
+                      ) : (
+                        <Image
+                          src={dexDetailDisplay?.imageSrc ?? getSpeciesFallbackImageSrc(dexDetailSpecies)}
+                          alt={dexDetailSpecies}
+                          fill
+                          sizes="160px"
+                          className="bird-dex-detail-photo-img"
+                        />
+                      )}
                     </div>
                     <div
                       ref={dexDescWrapRef}

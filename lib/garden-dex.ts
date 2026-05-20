@@ -1,7 +1,7 @@
 import { getRecordSpeciesLabel } from "@/lib/garden-daily";
 import { migrateBirdRecord } from "@/lib/garden-records";
-import { LISTED_SPECIES, getListedSpeciesByName } from "@/lib/species-catalog";
-import type { BirdRecord, DailyGardenArchive } from "@/lib/supabase/garden";
+import { KNOWN_SPECIES_NAME_SET, LISTED_SPECIES, getListedSpeciesByName } from "@/lib/species-catalog";
+import type { BirdRecord, CustomListBird, DailyGardenArchive } from "@/lib/supabase/garden";
 
 const KST_TIMEZONE = "Asia/Seoul";
 
@@ -72,6 +72,48 @@ export const SPECIES_DEX_CATALOG: SpeciesDexInfo[] = [
 ];
 
 const SPECIES_BY_NAME = new Map(SPECIES_DEX_CATALOG.map((item) => [item.name, item]));
+
+export function getDexDetailDisplay(
+  speciesName: string,
+  options: {
+    records: BirdRecord[];
+    archives?: Record<string, DailyGardenArchive>;
+    customListBirds?: CustomListBird[];
+  }
+): { imageSrc: string; description: string; isCatalogSpecies: boolean } {
+  const trimmed = speciesName.trim();
+  const catalog = getSpeciesDexInfo(trimmed);
+  const custom = options.customListBirds?.find((entry) => entry.name === trimmed);
+
+  const allRecords: BirdRecord[] = [...options.records];
+  if (options.archives) {
+    for (const archive of Object.values(options.archives)) {
+      allRecords.push(...archive.records);
+    }
+  }
+  const photoRecord = [...allRecords]
+    .reverse()
+    .find((record) => getRecordSpeciesLabel(record) === trimmed && record.photoUrl);
+
+  const isCatalogSpecies = KNOWN_SPECIES_NAME_SET.has(trimmed);
+
+  if (!isCatalogSpecies) {
+    const imageSrc = photoRecord?.photoUrl ?? custom?.imageSrc ?? "/duck.png";
+    const description =
+      custom?.description?.trim() ||
+      photoRecord?.feature?.trim() ||
+      `${trimmed}에 대한 설명이 아직 준비되지 않았어요. 발견 기록을 쌓아 도감을 채워 보세요.`;
+    return { imageSrc, description, isCatalogSpecies: false };
+  }
+
+  return {
+    imageSrc: catalog?.imageSrc ?? "/duck.png",
+    description:
+      catalog?.description ??
+      `${trimmed}에 대한 설명이 아직 준비되지 않았어요. 발견 기록을 쌓아 도감을 채워 보세요.`,
+    isCatalogSpecies: true,
+  };
+}
 
 export function getSpeciesDexInfo(speciesName: string): SpeciesDexInfo | null {
   const trimmed = speciesName.trim();
