@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { getBirdDisplaySize } from "@/lib/garden-birds";
-import { getSpriteSrcForRecord, isLandSpecies } from "@/lib/species-catalog";
+import { getSpriteSrcForRecord, resolveBirdInWater } from "@/lib/species-catalog";
 import type { BirdRecord, PlacedBird } from "@/lib/supabase/garden";
 
 const BACKGROUND_SRC = "/background.jpg";
@@ -183,8 +183,7 @@ export function GardenWorldView({
         {birds.map((bird) => {
           const isBubbleOpen = !readOnly && selectedBird?.id === bird.id;
           const record = bird.recordId ? recordById.get(bird.recordId) : undefined;
-          const inWater =
-            record && isLandSpecies(record.listBirdId) ? false : bird.inWater !== false;
+          const inWater = resolveBirdInWater(bird, record);
           const birdSpriteSrc = record ? getSpriteSrcForRecord(record, inWater) : DEFAULT_SPRITE;
           const displaySize = Math.max(8, Math.round(getBirdDisplaySize(bird) * birdSizeScale));
           const bubbleWidth = Math.min(200, Math.max(152, Math.round(displaySize * 2.6)));

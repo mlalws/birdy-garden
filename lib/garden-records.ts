@@ -1,4 +1,5 @@
 import { getRecordSpeciesLabel } from "@/lib/garden-daily";
+import { normalizePlacedBirds } from "@/lib/garden-birds";
 import {
   KNOWN_SPECIES_NAME_SET,
   LIST_SPECIES_BY_ID,
@@ -164,12 +165,30 @@ function migrateDexSeenSpecies(seen: string[] | undefined, records: BirdRecord[]
   return [...labels];
 }
 
+function normalizeArchiveBirds(archives: Record<string, DailyGardenArchive> | undefined) {
+  if (!archives) {
+    return undefined;
+  }
+
+  const next: Record<string, DailyGardenArchive> = {};
+  for (const [dateKey, archive] of Object.entries(archives)) {
+    const records = migrateBirdRecords(archive.records);
+    next[dateKey] = {
+      ...archive,
+      records,
+      birds: normalizePlacedBirds(archive.birds, records),
+    };
+  }
+  return next;
+}
+
 export function migrateGardenPayload(payload: UserGardenPayload): UserGardenPayload {
   const records = migrateBirdRecords(payload.records);
-  const dailyArchives = migrateArchives(payload.dailyArchives);
+  const dailyArchives = normalizeArchiveBirds(migrateArchives(payload.dailyArchives));
   return {
     ...payload,
     records,
+    birds: normalizePlacedBirds(payload.birds, records),
     dailyArchives,
     dexUnlockedSpecies: migrateDexUnlockedSpecies(
       payload.dexUnlockedSpecies,

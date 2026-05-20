@@ -232,6 +232,9 @@ export default function Home() {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [isDexOpen, setIsDexOpen] = useState(false);
   const [dexDetailSpecies, setDexDetailSpecies] = useState<string | null>(null);
+  const [isDexDescPopupOpen, setIsDexDescPopupOpen] = useState(false);
+  const [dexDescOverflows, setDexDescOverflows] = useState(false);
+  const dexDescTextRef = useRef<HTMLParagraphElement>(null);
   const [dexMenuRecordId, setDexMenuRecordId] = useState<string | null>(null);
   const [dexEditRecordId, setDexEditRecordId] = useState<string | null>(null);
   const [dexEditCount, setDexEditCount] = useState(1);
@@ -551,7 +554,7 @@ export default function Home() {
 
   const applyGardenPayload = (payload: UserGardenPayload) => {
     const migrated = migrateGardenPayload(payload);
-    setGardenBirds(normalizePlacedBirds(migrated.birds));
+    setGardenBirds(normalizePlacedBirds(migrated.birds, migrated.records));
     setBirdRecords(migrated.records);
     setDexUnlockedSpecies(migrated.dexUnlockedSpecies ?? []);
     setDexSeenSpecies(migrated.dexSeenSpecies ?? []);
@@ -642,6 +645,28 @@ export default function Home() {
     }
     return collectSpeciesSightings(dexDetailSpecies, birdRecords, dailyArchives);
   }, [dexDetailSpecies, birdRecords, dailyArchives]);
+
+  const dexDetailDescription = useMemo(() => {
+    if (!dexDetailSpecies) {
+      return "";
+    }
+    return (
+      dexDetailInfo?.description ??
+      `${dexDetailSpecies}에 대한 설명이 아직 준비되지 않았어요. 발견 기록을 쌓아 도감을 채워 보세요.`
+    );
+  }, [dexDetailInfo?.description, dexDetailSpecies]);
+
+  useLayoutEffect(() => {
+    if (!dexDetailSpecies) {
+      setDexDescOverflows(false);
+      return;
+    }
+    const el = dexDescTextRef.current;
+    if (!el) {
+      return;
+    }
+    setDexDescOverflows(el.scrollHeight > el.clientHeight + 2);
+  }, [dexDetailDescription, dexDetailSpecies]);
 
   const loadGardenForUser = async (
     uid: string,
@@ -1082,6 +1107,7 @@ export default function Home() {
     setDexDetailSpecies(null);
     setDexMenuRecordId(null);
     setDexEditRecordId(null);
+    setIsDexDescPopupOpen(false);
   };
 
   const openDexDetail = (speciesName: string) => {
@@ -1090,6 +1116,7 @@ export default function Home() {
     setDexDetailSpecies(speciesName);
     setDexMenuRecordId(null);
     setDexEditRecordId(null);
+    setIsDexDescPopupOpen(false);
   };
 
   const openArchiveGardenForDate = (dateKey: string) => {
@@ -1139,8 +1166,11 @@ export default function Home() {
         nextBirds = nextBirds.filter((bird) => !removeIds.has(bird.id));
       } else if (nextCount > existingBirdsForRecord.length) {
         const addCount = nextCount - existingBirdsForRecord.length;
-        const added = createGardenBirds(addCount, nextBirds.length, target.id, { listBirdId: target.listBirdId });
-        nextBirds = normalizePlacedBirds([...nextBirds, ...added]);
+        const added = createGardenBirds(addCount, nextBirds.length, target.id, {
+          listBirdId: target.listBirdId,
+          speciesName: target.speciesName,
+        });
+        nextBirds = normalizePlacedBirds([...nextBirds, ...added], birdRecords);
       }
 
       const nextRecords = birdRecords.map((record) =>
@@ -1456,8 +1486,11 @@ export default function Home() {
       nextBirds = nextBirds.filter((bird) => !removeIds.has(bird.id));
     } else if (nextCount > existingBirdsForRecord.length) {
       const addCount = nextCount - existingBirdsForRecord.length;
-      const added = createGardenBirds(addCount, nextBirds.length, target.id, { listBirdId: target.listBirdId });
-      nextBirds = normalizePlacedBirds([...nextBirds, ...added]);
+      const added = createGardenBirds(addCount, nextBirds.length, target.id, {
+        listBirdId: target.listBirdId,
+        speciesName: target.speciesName,
+      });
+      nextBirds = normalizePlacedBirds([...nextBirds, ...added], birdRecords);
     }
 
     const nextRecords = birdRecords.map((record) =>
@@ -1506,7 +1539,10 @@ export default function Home() {
     const speciesNameForConfirm = isUnlisted
       ? displayName
       : registrationSpeciesName?.trim() || displayName;
-    const newBirds = createGardenBirds(amount, gardenBirds.length, recordId, { listBirdId: selectedListBirdId });
+    const newBirds = createGardenBirds(amount, gardenBirds.length, recordId, {
+      listBirdId: selectedListBirdId,
+      speciesName: speciesNameForConfirm,
+    });
     const newRecord: BirdRecord = {
       id: recordId,
       name: displayName,
@@ -1519,8 +1555,8 @@ export default function Home() {
       longitude: pickedLocation?.lng,
       createdAt: new Date().toISOString(),
     };
-    const nextBirds = normalizePlacedBirds([...gardenBirds, ...newBirds]);
     const nextRecords = [...birdRecords, newRecord];
+    const nextBirds = normalizePlacedBirds([...gardenBirds, ...newBirds], nextRecords);
     const previousSightings = countLifetimeSpeciesSightings(birdRecords, dailyArchives, speciesNameForConfirm);
     const totalSightings = countLifetimeSpeciesSightings(nextRecords, dailyArchives, speciesNameForConfirm);
     const isFirstDiscovery = previousSightings === 0;
@@ -2962,11 +2998,60 @@ export default function Home() {
                         className="bird-dex-detail-photo-img"
                       />
                     </div>
-                    <p className="bird-dex-detail-desc">
-                      {dexDetailInfo?.description ??
-                        `${dexDetailSpecies}에 대한 설명이 아직 준비되지 않았어요. 발견 기록을 쌓아 도감을 채워 보세요.`}
-                    </p>
+                    <div
+                      className={`bird-dex-detail-desc-wrap${dexDescOverflows ? " bird-dex-detail-desc-wrap--overflow" : ""}`}
+                      role={dexDescOverflows ? "button" : undefined}
+                      tabIndex={dexDescOverflows ? 0 : undefined}
+                      aria-label={dexDescOverflows ? "전체 설명 보기" : undefined}
+                      onClick={() => {
+                        if (dexDescOverflows) {
+                          setIsDexDescPopupOpen(true);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (!dexDescOverflows) {
+                          return;
+                        }
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setIsDexDescPopupOpen(true);
+                        }
+                      }}
+                    >
+                      <p ref={dexDescTextRef} className="bird-dex-detail-desc-text">
+                        {dexDetailDescription}
+                      </p>
+                      {dexDescOverflows ? (
+                        <div className="bird-dex-detail-desc-fade" aria-hidden>
+                          <span className="bird-dex-detail-desc-ellipsis">...</span>
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
+
+                  {isDexDescPopupOpen ? (
+                    <div
+                      className="bird-dex-desc-popup-screen"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label={`${dexDetailSpecies} 설명`}
+                      onClick={() => setIsDexDescPopupOpen(false)}
+                    >
+                      <div className="bird-dex-desc-popup" onClick={(event) => event.stopPropagation()}>
+                        <header className="bird-dex-desc-popup-header">
+                          <button
+                            type="button"
+                            className="bird-dex-desc-popup-close"
+                            onClick={() => setIsDexDescPopupOpen(false)}
+                            aria-label="설명 닫기"
+                          >
+                            <img src="/x.png" alt="" width={44} height={44} decoding="sync" className="bird-dex-desc-popup-close-img" />
+                          </button>
+                        </header>
+                        <p className="bird-dex-desc-popup-text">{dexDetailDescription}</p>
+                      </div>
+                    </div>
+                  ) : null}
 
                   <h2 className="bird-dex-detail-name">{dexDetailSpecies}</h2>
 

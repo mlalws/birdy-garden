@@ -80,7 +80,7 @@ function normalizePayload(raw: unknown): UserGardenPayload {
             size: raw.size,
             recordId: typeof raw.recordId === "string" ? raw.recordId : undefined,
             facing,
-            inWater: raw.inWater !== false,
+            inWater: raw.inWater === true,
           };
         })
     : [];

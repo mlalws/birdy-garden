@@ -1000,13 +1000,14 @@ select {
   display: grid;
   grid-template-columns: 130px 1fr;
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .bird-dex-detail-photo {
   position: relative;
   width: 130px;
   height: 110px;
+  flex-shrink: 0;
   border-radius: 10px;
   overflow: hidden;
   background: #fffaf3;
@@ -1018,17 +1019,108 @@ select {
   padding: 6px;
 }
 
-.bird-dex-detail-desc {
-  margin: 0;
-  padding: 10px 12px;
-  min-height: 110px;
+.bird-dex-detail-desc-wrap {
+  position: relative;
+  height: 110px;
+  min-width: 0;
   border-radius: 10px;
   background: #fff;
+  border: 1px solid rgba(139, 94, 60, 0.22);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.bird-dex-detail-desc-wrap--overflow {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bird-dex-detail-desc-text {
+  margin: 0;
+  padding: 10px 12px 12px;
   color: #4a3018;
   font-size: 12px;
   line-height: 1.5;
   font-weight: 600;
-  box-sizing: border-box;
+}
+
+.bird-dex-detail-desc-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 42px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 10px 8px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.82) 42%,
+    #fff 78%
+  );
+  pointer-events: none;
+}
+
+.bird-dex-detail-desc-ellipsis {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  color: #6e4a2d;
+  letter-spacing: 0.02em;
+}
+
+.bird-dex-desc-popup-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  background: rgba(58, 42, 28, 0.42);
+}
+
+.bird-dex-desc-popup {
+  width: min(100%, 340px);
+  max-height: min(70vh, 420px);
+  overflow-y: auto;
+  border-radius: 14px;
+  border: 1px solid rgba(139, 94, 60, 0.35);
+  background: #faf0e4;
+  box-shadow: 0 12px 28px rgba(74, 48, 24, 0.22);
+}
+
+.bird-dex-desc-popup-header {
+  padding: 8px 10px 0;
+}
+
+.bird-dex-desc-popup-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bird-dex-desc-popup-close-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.bird-dex-desc-popup-text {
+  margin: 0;
+  padding: 4px 16px 18px;
+  color: #4a3018;
+  font-size: 14px;
+  line-height: 1.55;
+  font-weight: 600;
 }
 
 .bird-dex-detail-name {

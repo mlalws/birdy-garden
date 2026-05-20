@@ -21,6 +21,13 @@ export const SPECIES_DEX_CATALOG: SpeciesDexInfo[] = [
       "청둥오리는 우리나라에서 가장 흔히 만나는 오리입니다. 수컷은 머리가 녹색, 암컷은 갈색 깃으로 위장하며, 연못·강·습지에서 헤엄치거나 기와 주변을 걸어 다니며 먹이를 찾습니다. 겨울철에도 도심 공원 연못에서 자주 관찰됩니다.",
   },
   {
+    id: "mallard_female",
+    name: "청둥오리 암컷",
+    imageSrc: "/gduck.png",
+    description:
+      "청둥오리 암컷은 갈색·회색 깃으로 위장하는 수컷과 달리 보입니다. 연못과 습지에서 헤엄치거나 물가를 걸으며 먹이를 찾으며, 무리로 지내기도 합니다.",
+  },
+  {
     id: "magpie",
     name: "까치",
     imageSrc: "/kachi.png",
