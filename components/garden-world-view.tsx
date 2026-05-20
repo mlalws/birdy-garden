@@ -15,7 +15,8 @@ type BgLayout = {
 };
 
 const FULL_BG_LAYOUT: BgLayout = { leftPct: 0, topPct: 0, widthPct: 100, heightPct: 100 };
-const DEFAULT_BIRD_SPRITE = "/test.png";
+const DUCK_SHORE_SPRITE = "/duck.png";
+const DUCK_WATER_SPRITE = "/wduck.png";
 const MAGPIE_SPRITE = "/kachi.png";
 
 /** object-fit: contain + left center 기준 실제 그려진 배경 영역 */
@@ -191,8 +192,12 @@ export function GardenWorldView({
           const isBubbleOpen = !readOnly && selectedBird?.id === bird.id;
           const record = bird.recordId ? recordById.get(bird.recordId) : undefined;
           const isMagpie = isMagpieRecord(record);
-          const birdSpriteSrc = isMagpie ? MAGPIE_SPRITE : DEFAULT_BIRD_SPRITE;
           const inWater = isMagpie ? false : bird.inWater !== false;
+          const birdSpriteSrc = isMagpie
+            ? MAGPIE_SPRITE
+            : inWater
+              ? DUCK_WATER_SPRITE
+              : DUCK_SHORE_SPRITE;
           const displaySize = Math.max(8, Math.round(getBirdDisplaySize(bird) * birdSizeScale));
           const bubbleWidth = Math.min(200, Math.max(152, Math.round(displaySize * 2.6)));
           const anchorPos = mapBirdAnchorPosition(bird, isMini ? FULL_BG_LAYOUT : bgLayout);
