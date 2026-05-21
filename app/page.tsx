@@ -53,6 +53,7 @@ import {
 import {
   getListedSpeciesByRecord,
   isCustomListBirdId,
+  LISTED_SPECIES,
   speciesUsesSexSplit,
 } from "@/lib/species-catalog";
 import {
@@ -344,6 +345,7 @@ export default function Home() {
   const [rankingError, setRankingError] = useState("");
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [mapSession, setMapSession] = useState(0);
+  const [mapPickerSession, setMapPickerSession] = useState(0);
   const [mapCenter, setMapCenter] = useState<BirdPoint>(DEFAULT_MAP_CENTER);
   const [pickedLocation, setPickedLocation] = useState<BirdPoint | null>(null);
   const [selectedMapGroupId, setSelectedMapGroupId] = useState<string | null>(null);
@@ -1123,6 +1125,13 @@ export default function Home() {
     );
   };
 
+  useEffect(() => {
+    if (!isBirdInfoScreenOpen) {
+      return;
+    }
+    captureCurrentLocation(true);
+  }, [isBirdInfoScreenOpen]);
+
   const backFromBirdFormToList = () => {
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
@@ -1166,8 +1175,9 @@ export default function Home() {
     setBirdMaleCount(1);
     setBirdFemaleCount(0);
     setPhotoPreviewUrl(opts?.photoUrl ?? null);
+    setMapPickerSession((prev) => prev + 1);
     setPickedLocation(null);
-    captureCurrentLocation();
+    captureCurrentLocation(true);
   };
 
   const openUnlistedBirdRegistration = () => {
@@ -2824,12 +2834,15 @@ export default function Home() {
                 <h3 className="bird-map-title">발견 장소 설정</h3>
                 <div className="bird-map-frame">
                   <LocationMap
-                    key="map-registration-picker"
+                    key={`map-registration-picker-${mapPickerSession}`}
                     active={isBirdInfoScreenOpen}
                     mode="picker"
                     theme="warm"
-                    center={pickedLocation ?? mapCenter}
+                    zoom={15}
+                    center={mapCenter}
+                    userLocation={mapCenter}
                     selectedPoint={pickedLocation}
+                    points={mapViewerPoints}
                     onPick={(point) => setPickedLocation(point)}
                   />
                 </div>
