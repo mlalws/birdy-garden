@@ -17,6 +17,62 @@ export type WeeklyDiscoveryResult = {
   previousRank: number | null;
 };
 
+const RANKING_SELECT_BASE = "user_id, nickname, discovery_count, updated_at";
+const RANKING_SELECT_WITH_AVATAR = `${RANKING_SELECT_BASE}, avatar_url`;
+
+/** Supabase에 avatar_url 컬럼이 없으면 false — 랭킹은 계속 동작 */
+let rankingAvatarColumnSupported: boolean | null = null;
+
+function isMissingAvatarColumnError(error: unknown): boolean {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message: string }).message)
+      : String(error ?? "");
+  const lower = message.toLowerCase();
+  return lower.includes("avatar_url") && (lower.includes("does not exist") || lower.includes("column"));
+}
+
+function rankingSelectColumns(): string {
+  return rankingAvatarColumnSupported === false ? RANKING_SELECT_BASE : RANKING_SELECT_WITH_AVATAR;
+}
+
+function markAvatarColumnUnsupported(error: unknown): boolean {
+  if (isMissingAvatarColumnError(error)) {
+    rankingAvatarColumnSupported = false;
+    return true;
+  }
+  return false;
+}
+
+function supportsRankingAvatar(): boolean {
+  return rankingAvatarColumnSupported !== false;
+}
+
+function buildRankingUpsertPayload(
+  userId: string,
+  weekKey: string,
+  discoveryCount: number,
+  nickname: string,
+  avatarUrl?: string | null
+): Record<string, string | number> {
+  const payload: Record<string, string | number> = {
+    user_id: userId,
+    week_key: weekKey,
+    discovery_count: discoveryCount,
+    nickname,
+    updated_at: new Date().toISOString(),
+  };
+  if (!supportsRankingAvatar()) {
+    return payload;
+  }
+  const safeAvatar =
+    typeof avatarUrl === "string" && avatarUrl.startsWith("data:image/") ? avatarUrl : null;
+  if (safeAvatar) {
+    payload.avatar_url = safeAvatar;
+  }
+  return payload;
+}
+
 const sortRankingRows = (rows: WeeklyRankingRow[]): WeeklyRankingRow[] =>
   [...rows].sort((a, b) => {
     if (b.discovery_count !== a.discovery_count) {
@@ -71,6 +127,37 @@ export function countWeekDiscoveriesFromGarden(
   return sum;
 }
 
+async function queryWeeklyRankingRows(weekKey: string, limit: number): Promise<WeeklyRankingRow[]> {
+  const supabase = getSupabaseBrowserClient();
+  let result = await supabase
+    .from("weekly_rankings")
+    .select(rankingSelectColumns())
+    .eq("week_key", weekKey)
+    .order("discovery_count", { ascending: false })
+    .order("updated_at", { ascending: true })
+    .limit(limit);
+
+  if (result.error && markAvatarColumnUnsupported(result.error)) {
+    result = await supabase
+      .from("weekly_rankings")
+      .select(rankingSelectColumns())
+      .eq("week_key", weekKey)
+      .order("discovery_count", { ascending: false })
+      .order("updated_at", { ascending: true })
+      .limit(limit);
+  }
+
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (rankingAvatarColumnSupported === null && !result.error) {
+    rankingAvatarColumnSupported = true;
+  }
+
+  return (result.data ?? []) as WeeklyRankingRow[];
+}
+
 /** 랭킹 테이블 생성 전·저장 실패분 — 정원 데이터 기준으로 이번 주 점수 보정 */
 export async function syncWeeklyRankingFromGarden(
   userId: string,
@@ -92,16 +179,30 @@ export async function syncWeeklyRankingFromGarden(
   const safeAvatar =
     typeof avatarUrl === "string" && avatarUrl.startsWith("data:image/") ? avatarUrl : null;
 
-  const { data: existing, error: readError } = await supabase
+  let existingResult = await supabase
     .from("weekly_rankings")
-    .select("discovery_count, avatar_url")
+    .select(supportsRankingAvatar() ? "discovery_count, avatar_url" : "discovery_count")
     .eq("user_id", userId)
     .eq("week_key", weekKey)
     .maybeSingle();
 
-  if (readError) {
-    throw readError;
+  if (existingResult.error && markAvatarColumnUnsupported(existingResult.error)) {
+    existingResult = await supabase
+      .from("weekly_rankings")
+      .select("discovery_count")
+      .eq("user_id", userId)
+      .eq("week_key", weekKey)
+      .maybeSingle();
   }
+
+  if (existingResult.error) {
+    throw existingResult.error;
+  }
+
+  const existing = existingResult.data as
+    | { discovery_count: number; avatar_url?: string | null }
+    | null
+    | undefined;
 
   if (fromGarden <= 0) {
     if (!existing) {
@@ -119,25 +220,33 @@ export async function syncWeeklyRankingFromGarden(
   }
 
   const existingAvatar =
-    typeof existing?.avatar_url === "string" && existing.avatar_url.startsWith("data:image/")
+    supportsRankingAvatar() &&
+    typeof existing?.avatar_url === "string" &&
+    existing.avatar_url.startsWith("data:image/")
       ? existing.avatar_url
       : null;
 
-  if (fromGarden === existing?.discovery_count && safeAvatar === existingAvatar) {
+  if (fromGarden === existing?.discovery_count && (!supportsRankingAvatar() || safeAvatar === existingAvatar)) {
     return;
   }
 
-  const { error: upsertError } = await supabase.from("weekly_rankings").upsert(
-    {
-      user_id: userId,
-      week_key: weekKey,
-      discovery_count: fromGarden,
-      nickname: safeNickname,
-      avatar_url: safeAvatar,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,week_key" }
-  );
+  let upsertError = (
+    await supabase
+      .from("weekly_rankings")
+      .upsert(buildRankingUpsertPayload(userId, weekKey, fromGarden, safeNickname, avatarUrl), {
+        onConflict: "user_id,week_key",
+      })
+  ).error;
+
+  if (upsertError && markAvatarColumnUnsupported(upsertError)) {
+    upsertError = (
+      await supabase
+        .from("weekly_rankings")
+        .upsert(buildRankingUpsertPayload(userId, weekKey, fromGarden, safeNickname), {
+          onConflict: "user_id,week_key",
+        })
+    ).error;
+  }
 
   if (upsertError) {
     throw upsertError;
@@ -152,20 +261,7 @@ export async function fetchWeeklyLeaderboard(
     return [];
   }
 
-  const supabase = getSupabaseBrowserClient();
-  const { data, error } = await supabase
-    .from("weekly_rankings")
-    .select("user_id, nickname, discovery_count, updated_at, avatar_url")
-    .eq("week_key", weekKey)
-    .order("discovery_count", { ascending: false })
-    .order("updated_at", { ascending: true })
-    .limit(limit);
-
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as WeeklyRankingRow[];
+  return queryWeeklyRankingRows(weekKey, limit);
 }
 
 export async function recordWeeklyDiscovery(
@@ -183,49 +279,34 @@ export async function recordWeeklyDiscovery(
   const safeNickname = nickname.trim() || "탐험가";
   const addCount = Math.max(1, Math.floor(amount));
 
-  const { data: beforeRows, error: beforeError } = await supabase
-    .from("weekly_rankings")
-    .select("user_id, nickname, discovery_count, updated_at, avatar_url")
-    .eq("week_key", weekKey);
-
-  if (beforeError) {
-    throw beforeError;
-  }
-
-  const sortedBefore = sortRankingRows((beforeRows ?? []) as WeeklyRankingRow[]);
+  const sortedBefore = sortRankingRows(await queryWeeklyRankingRows(weekKey, 200));
   const previousRank = rankFromSortedRows(sortedBefore, userId);
   const existing = sortedBefore.find((row) => row.user_id === userId);
   const nextCount = (existing?.discovery_count ?? 0) + addCount;
 
-  const safeAvatar =
-    typeof avatarUrl === "string" && avatarUrl.startsWith("data:image/") ? avatarUrl : null;
+  let upsertError = (
+    await supabase
+      .from("weekly_rankings")
+      .upsert(buildRankingUpsertPayload(userId, weekKey, nextCount, safeNickname, avatarUrl), {
+        onConflict: "user_id,week_key",
+      })
+  ).error;
 
-  const { error: upsertError } = await supabase.from("weekly_rankings").upsert(
-    {
-      user_id: userId,
-      week_key: weekKey,
-      discovery_count: nextCount,
-      nickname: safeNickname,
-      avatar_url: safeAvatar,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,week_key" }
-  );
+  if (upsertError && markAvatarColumnUnsupported(upsertError)) {
+    upsertError = (
+      await supabase
+        .from("weekly_rankings")
+        .upsert(buildRankingUpsertPayload(userId, weekKey, nextCount, safeNickname), {
+          onConflict: "user_id,week_key",
+        })
+    ).error;
+  }
 
   if (upsertError) {
     throw upsertError;
   }
 
-  const { data: afterRows, error: afterError } = await supabase
-    .from("weekly_rankings")
-    .select("user_id, nickname, discovery_count, updated_at, avatar_url")
-    .eq("week_key", weekKey);
-
-  if (afterError) {
-    throw afterError;
-  }
-
-  const sortedAfter = sortRankingRows((afterRows ?? []) as WeeklyRankingRow[]);
+  const sortedAfter = sortRankingRows(await queryWeeklyRankingRows(weekKey, 200));
   const rank = rankFromSortedRows(sortedAfter, userId);
 
   return {

@@ -3203,6 +3203,7 @@ export default function Home() {
                   {weeklyLeaderboard.map((row, index) => {
                     const rank = index + 1;
                     const isMe = row.user_id === userId;
+                    const rowAvatarUrl = row.avatar_url ?? (isMe ? profileAvatarUrl : null);
                     const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : null;
                     return (
                       <li
@@ -3213,9 +3214,9 @@ export default function Home() {
                           {medal ?? rank}
                         </span>
                         <span className="bird-ranking-avatar" aria-hidden>
-                          {row.avatar_url ? (
+                          {rowAvatarUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={row.avatar_url} alt="" className="bird-ranking-avatar-img" />
+                            <img src={rowAvatarUrl} alt="" className="bird-ranking-avatar-img" />
                           ) : (
                             <span className="bird-ranking-avatar-initial">
                               {(row.nickname || "탐").charAt(0)}
