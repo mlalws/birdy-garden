@@ -430,17 +430,31 @@ export default function Home() {
 
   const profileAvatarUrl = userProfile?.avatarUrl ?? null;
 
+  const activeGardenBirds = useMemo(() => {
+    if (isArchiveGardenOpen && archiveViewSnapshot) {
+      return archiveViewSnapshot.birds;
+    }
+    return gardenBirds;
+  }, [isArchiveGardenOpen, archiveViewSnapshot, gardenBirds]);
+
+  const activeGardenRecords = useMemo(() => {
+    if (isArchiveGardenOpen && archiveViewSnapshot) {
+      return archiveViewSnapshot.records;
+    }
+    return birdRecords;
+  }, [isArchiveGardenOpen, archiveViewSnapshot, birdRecords]);
+
   const selectedGardenBird = useMemo(
-    () => gardenBirds.find((bird) => bird.id === selectedGardenBirdId) ?? null,
-    [gardenBirds, selectedGardenBirdId]
+    () => activeGardenBirds.find((bird) => bird.id === selectedGardenBirdId) ?? null,
+    [activeGardenBirds, selectedGardenBirdId]
   );
 
   const selectedGardenBirdRecord = useMemo(() => {
     if (!selectedGardenBird?.recordId) {
       return null;
     }
-    return birdRecords.find((record) => record.id === selectedGardenBird.recordId) ?? null;
-  }, [birdRecords, selectedGardenBird]);
+    return activeGardenRecords.find((record) => record.id === selectedGardenBird.recordId) ?? null;
+  }, [activeGardenRecords, selectedGardenBird]);
 
   const allMapRecords = useMemo(
     () => collectAllMapRecords(birdRecords, dailyArchives),
@@ -1396,7 +1410,8 @@ export default function Home() {
               userId,
               profileUsername.trim() || "탐험가",
               nextRecords,
-              dailyArchives
+              dailyArchives,
+              profileAvatarUrl
             );
           }
         } catch (error) {
@@ -1500,7 +1515,8 @@ export default function Home() {
         userId,
         profileUsername.trim() || "탐험가",
         birdRecords,
-        dailyArchives
+        dailyArchives,
+        profileAvatarUrl
       );
       const rows = await fetchWeeklyLeaderboard(getKstWeekKey());
       setWeeklyLeaderboard(rows);
@@ -1523,6 +1539,7 @@ export default function Home() {
 
   const closeArchiveGarden = () => {
     const returnTarget = archiveGardenReturnTarget;
+    closeGardenBirdDetail();
     setIsArchiveGardenOpen(false);
     setArchiveGardenReturnTarget(null);
 
@@ -1604,23 +1621,66 @@ export default function Home() {
     }
     const birdId = selectedGardenBird.id;
     const recordId = selectedGardenBird.recordId;
-    const nextBirds = gardenBirds.filter((bird) => bird.id !== birdId);
-    let nextRecords = birdRecords;
+    const todayKey = getKstDateKey();
+    const isPastArchiveDay =
+      isArchiveGardenOpen && selectedCalendarDateKey !== todayKey && !!dailyArchives[selectedCalendarDateKey];
 
-    if (recordId) {
-      const target = birdRecords.find((record) => record.id === recordId);
-      if (target) {
-        const remainingForRecord = nextBirds.filter((bird) => bird.recordId === recordId).length;
-        if (remainingForRecord === 0) {
-          nextRecords = birdRecords.filter((record) => record.id !== recordId);
-        } else if (target.count > remainingForRecord) {
-          nextRecords = birdRecords.map((record) =>
-            record.id === recordId ? { ...record, count: remainingForRecord } : record
-          );
+    const applyDeleteToSnapshot = (
+      birds: PlacedBird[],
+      records: BirdRecord[]
+    ): { birds: PlacedBird[]; records: BirdRecord[] } => {
+      const nextBirds = birds.filter((bird) => bird.id !== birdId);
+      let nextRecords = records;
+      if (recordId) {
+        const target = records.find((record) => record.id === recordId);
+        if (target) {
+          const remainingForRecord = nextBirds.filter((bird) => bird.recordId === recordId).length;
+          if (remainingForRecord === 0) {
+            nextRecords = records.filter((record) => record.id !== recordId);
+          } else if (target.count > remainingForRecord) {
+            nextRecords = records.map((record) =>
+              record.id === recordId ? { ...record, count: remainingForRecord } : record
+            );
+          }
         }
       }
+      return { birds: nextBirds, records: nextRecords };
+    };
+
+    if (isPastArchiveDay) {
+      const archive = dailyArchives[selectedCalendarDateKey];
+      const { birds: nextBirds, records: nextRecords } = applyDeleteToSnapshot(archive.birds, archive.records);
+      const nextArchives = {
+        ...dailyArchives,
+        [selectedCalendarDateKey]: { ...archive, birds: nextBirds, records: nextRecords },
+      };
+      markGardenDirty();
+      setDailyArchives(nextArchives);
+      closeGardenBirdDetail();
+
+      if (userId) {
+        try {
+          await persistGarden(userId, {
+            ...buildGardenPayloadFromSnapshot(),
+            dailyArchives: nextArchives,
+          });
+          if (isSupabaseConfigured()) {
+            await syncWeeklyRankingFromGarden(
+              userId,
+              profileUsername.trim() || "탐험가",
+              birdRecords,
+              nextArchives,
+              profileAvatarUrl
+            );
+          }
+        } catch (error) {
+          reportGardenSyncError(error);
+        }
+      }
+      return;
     }
 
+    const { birds: nextBirds, records: nextRecords } = applyDeleteToSnapshot(gardenBirds, birdRecords);
     markGardenDirty();
     setGardenBirds(nextBirds);
     setBirdRecords(nextRecords);
@@ -1638,7 +1698,8 @@ export default function Home() {
             userId,
             profileUsername.trim() || "탐험가",
             nextRecords,
-            dailyArchives
+            dailyArchives,
+            profileAvatarUrl
           );
         }
       } catch (error) {
@@ -1668,7 +1729,8 @@ export default function Home() {
             userId,
             profileUsername.trim() || "탐험가",
             nextRecords,
-            dailyArchives
+            dailyArchives,
+            profileAvatarUrl
           );
         }
       } catch (error) {
@@ -1762,7 +1824,8 @@ export default function Home() {
             userId,
             profileUsername.trim() || "탐험가",
             nextRecords,
-            dailyArchives
+            dailyArchives,
+            profileAvatarUrl
           );
         }
       } catch (error) {
@@ -1848,7 +1911,12 @@ export default function Home() {
       let weeklyRankBanner: string | null = null;
       if (userId && isSupabaseConfigured()) {
         try {
-          const rankingResult = await recordWeeklyDiscovery(userId, profileUsername.trim() || "탐험가", amount);
+          const rankingResult = await recordWeeklyDiscovery(
+            userId,
+            profileUsername.trim() || "탐험가",
+            amount,
+            profileAvatarUrl
+          );
           if (rankingResult) {
             weeklyRankBanner = weeklyRankBannerMessage(rankingResult);
           }
@@ -1940,6 +2008,19 @@ export default function Home() {
       profile,
     });
     setProfileEditMessage(message);
+    if (isSupabaseConfigured()) {
+      try {
+        await syncWeeklyRankingFromGarden(
+          userId,
+          profile.nickname.trim() || profileUsername.trim() || "탐험가",
+          birdRecords,
+          dailyArchives,
+          profile.avatarUrl ?? null
+        );
+      } catch {
+        /* 랭킹 아바타 동기화 실패는 프로필 저장을 막지 않음 */
+      }
+    }
   };
 
   const openNicknameEditor = () => {
@@ -2964,7 +3045,16 @@ export default function Home() {
               </h1>
             </header>
             <div className="garden-scroll bird-archive-garden-scroll" ref={archiveScrollRef}>
-              <GardenWorldView birds={archiveViewSnapshot.birds} records={archiveViewSnapshot.records} readOnly />
+              <GardenWorldView
+                birds={archiveViewSnapshot.birds}
+                records={archiveViewSnapshot.records}
+                selectedBirdId={selectedGardenBirdId}
+                deleteConfirm={gardenBirdDeleteConfirm}
+                onBirdClick={openGardenBirdDetail}
+                onRequestDelete={requestGardenBirdDelete}
+                onConfirmDelete={() => void confirmGardenBirdDelete()}
+                onCancelDelete={cancelGardenBirdDelete}
+              />
             </div>
           </div>
         ) : null}
@@ -3121,6 +3211,16 @@ export default function Home() {
                       >
                         <span className="bird-ranking-rank" aria-hidden>
                           {medal ?? rank}
+                        </span>
+                        <span className="bird-ranking-avatar" aria-hidden>
+                          {row.avatar_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={row.avatar_url} alt="" className="bird-ranking-avatar-img" />
+                          ) : (
+                            <span className="bird-ranking-avatar-initial">
+                              {(row.nickname || "탐").charAt(0)}
+                            </span>
+                          )}
                         </span>
                         <span className="bird-ranking-name">{row.nickname || "탐험가"}</span>
                         <span className="bird-ranking-score">{row.discovery_count}마리</span>

@@ -69,6 +69,14 @@ export const LISTED_SPECIES: ListedSpecies[] = [
       "온몸이 새검은 깃털로 덮여 있으며, 도구를 쓸 줄 알만큼 조류 중 지능이 가장 뛰어납니다.",
   },
   {
+    id: "pigeon",
+    name: "비둘기",
+    imageSrc: "/bidul.png",
+    placement: "land",
+    listBlurb:
+      "도시와 마을 곳곳에서 흔히 볼 수 있는 회색 깃의 새로, 짧은 부리와 둥근 몸집이 특징입니다.",
+  },
+  {
     id: "grey_heron",
     name: "해오라기",
     imageSrc: "/haeyo.png",
@@ -248,7 +256,7 @@ export function getSpeciesSizeScaleForRecord(record?: BirdRecord | null): number
 }
 
 /** 까치·참새·까마귀 — 연못(물) 위 배치 금지 */
-export const LAND_ONLY_SPECIES_IDS = new Set(["magpie", "sparrow", "crow"]);
+export const LAND_ONLY_SPECIES_IDS = new Set(["magpie", "sparrow", "crow", "pigeon"]);
 
 /** 연못 안·물가만 — 잔디(육지) 배치 금지 */
 export const WATER_AFFINITY_SPECIES_IDS = new Set([
@@ -311,24 +319,21 @@ export function recordMustStayNearWater(record: BirdRecord | null | undefined): 
   return WATER_AFFINITY_NAMES.has(label);
 }
 
-/** waterfowl(청둥오리·원앙 등) — y 기준 물/잔디 스프라이트 */
-export function isWaterfowlRecord(record: BirdRecord | null | undefined): boolean {
-  if (!record) {
-    return false;
-  }
-  const species = getListedSpeciesByRecord(record);
-  return species?.placement === "waterfowl";
+/** 물·육지 스프라이트 쌍이 있는 종 */
+export function speciesHasWaterSprite(species: ListedSpecies | null | undefined): boolean {
+  return !!species?.waterImageSrc;
 }
 
-/** 화면용 inWater — 푸른 연못(y≥80)이면 w*, 초록 잔디·물가(y<80)이면 duck/g* */
+/** 화면용 inWater — 연못(x·y) 안이면 w*, 밖이면 duck/g*·ang·haeyo 등 */
 export function resolveBirdInWater(
-  bird: Pick<PlacedBird, "yPercent" | "inWater">,
+  bird: Pick<PlacedBird, "xPercent" | "yPercent" | "inWater">,
   record?: BirdRecord | null
 ): boolean {
   if (record && recordMustStayOnLand(record)) {
     return false;
   }
-  if (record && (recordMustStayNearWater(record) || isWaterfowlRecord(record))) {
+  const species = getListedSpeciesByRecord(record ?? undefined);
+  if (speciesHasWaterSprite(species)) {
     return birdIsInWaterZone(bird);
   }
   return bird.inWater === true;
@@ -349,7 +354,7 @@ export function recordMustStayOnLand(record: BirdRecord | null | undefined): boo
     return true;
   }
   const label = record.speciesName?.trim() || record.name.trim();
-  return label === "까치" || label === "참새" || label === "까마귀";
+  return label === "까치" || label === "참새" || label === "까마귀" || label === "비둘기";
 }
 
 export function isWaderSpecies(listBirdId: string | null | undefined): boolean {

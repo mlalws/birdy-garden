@@ -49,6 +49,13 @@ export const SPECIES_DEX_CATALOG: SpeciesDexInfo[] = [
       "까마귀는 크고 검은 깃의 똑똑한 조류입니다. 도시 골목, 산책로, 들판에서 까까 울음을 내며 활동합니다. 잡식성으로 먹이를 넓게 찾으며, 무리로 움직일 때도 있어 관찰하기 쉽습니다.",
   },
   {
+    id: "pigeon",
+    name: "비둘기",
+    imageSrc: "/bidul.png",
+    description:
+      "비둘기는 도시와 마을에서 가장 흔히 만나는 회색 깃의 새입니다. 짧은 부리와 둥근 몸집, 구르륵거리는 울음소리가 특징이며, 잔디밭과 광장에서 씨앗을 찾아 먹습니다.",
+  },
+  {
     id: "grey_heron",
     name: "해오라기",
     imageSrc: "/haeyo.png",

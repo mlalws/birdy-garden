@@ -7,6 +7,7 @@ export type WeeklyRankingRow = {
   nickname: string;
   discovery_count: number;
   updated_at: string;
+  avatar_url?: string | null;
 };
 
 export type WeeklyDiscoveryResult = {
@@ -75,7 +76,8 @@ export async function syncWeeklyRankingFromGarden(
   userId: string,
   nickname: string,
   liveRecords: BirdRecord[],
-  archives: Record<string, DailyGardenArchive> | undefined
+  archives: Record<string, DailyGardenArchive> | undefined,
+  avatarUrl?: string | null
 ): Promise<void> {
   if (!isSupabaseConfigured()) {
     return;
@@ -87,9 +89,12 @@ export async function syncWeeklyRankingFromGarden(
   const supabase = getSupabaseBrowserClient();
   const safeNickname = nickname.trim() || "탐험가";
 
+  const safeAvatar =
+    typeof avatarUrl === "string" && avatarUrl.startsWith("data:image/") ? avatarUrl : null;
+
   const { data: existing, error: readError } = await supabase
     .from("weekly_rankings")
-    .select("discovery_count")
+    .select("discovery_count, avatar_url")
     .eq("user_id", userId)
     .eq("week_key", weekKey)
     .maybeSingle();
@@ -113,7 +118,12 @@ export async function syncWeeklyRankingFromGarden(
     return;
   }
 
-  if (fromGarden === existing?.discovery_count) {
+  const existingAvatar =
+    typeof existing?.avatar_url === "string" && existing.avatar_url.startsWith("data:image/")
+      ? existing.avatar_url
+      : null;
+
+  if (fromGarden === existing?.discovery_count && safeAvatar === existingAvatar) {
     return;
   }
 
@@ -123,6 +133,7 @@ export async function syncWeeklyRankingFromGarden(
       week_key: weekKey,
       discovery_count: fromGarden,
       nickname: safeNickname,
+      avatar_url: safeAvatar,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,week_key" }
@@ -144,7 +155,7 @@ export async function fetchWeeklyLeaderboard(
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase
     .from("weekly_rankings")
-    .select("user_id, nickname, discovery_count, updated_at")
+    .select("user_id, nickname, discovery_count, updated_at, avatar_url")
     .eq("week_key", weekKey)
     .order("discovery_count", { ascending: false })
     .order("updated_at", { ascending: true })
@@ -160,7 +171,8 @@ export async function fetchWeeklyLeaderboard(
 export async function recordWeeklyDiscovery(
   userId: string,
   nickname: string,
-  amount: number
+  amount: number,
+  avatarUrl?: string | null
 ): Promise<WeeklyDiscoveryResult | null> {
   if (!isSupabaseConfigured() || amount < 1) {
     return null;
@@ -173,7 +185,7 @@ export async function recordWeeklyDiscovery(
 
   const { data: beforeRows, error: beforeError } = await supabase
     .from("weekly_rankings")
-    .select("user_id, nickname, discovery_count, updated_at")
+    .select("user_id, nickname, discovery_count, updated_at, avatar_url")
     .eq("week_key", weekKey);
 
   if (beforeError) {
@@ -185,12 +197,16 @@ export async function recordWeeklyDiscovery(
   const existing = sortedBefore.find((row) => row.user_id === userId);
   const nextCount = (existing?.discovery_count ?? 0) + addCount;
 
+  const safeAvatar =
+    typeof avatarUrl === "string" && avatarUrl.startsWith("data:image/") ? avatarUrl : null;
+
   const { error: upsertError } = await supabase.from("weekly_rankings").upsert(
     {
       user_id: userId,
       week_key: weekKey,
       discovery_count: nextCount,
       nickname: safeNickname,
+      avatar_url: safeAvatar,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,week_key" }
@@ -202,7 +218,7 @@ export async function recordWeeklyDiscovery(
 
   const { data: afterRows, error: afterError } = await supabase
     .from("weekly_rankings")
-    .select("user_id, nickname, discovery_count, updated_at")
+    .select("user_id, nickname, discovery_count, updated_at, avatar_url")
     .eq("week_key", weekKey);
 
   if (afterError) {

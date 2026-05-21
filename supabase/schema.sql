@@ -36,9 +36,13 @@ create table if not exists public.weekly_rankings (
   week_key text not null,
   discovery_count integer not null default 0 check (discovery_count >= 0),
   nickname text not null default '',
+  avatar_url text,
   updated_at timestamptz not null default now(),
   primary key (user_id, week_key)
 );
+
+-- 기존 DB: Supabase SQL Editor에서 실행
+-- alter table public.weekly_rankings add column if not exists avatar_url text;
 
 create index if not exists weekly_rankings_week_score_idx
   on public.weekly_rankings (week_key, discovery_count desc, updated_at asc);

@@ -223,45 +223,32 @@ export function LocationMap({
 
     layer.clearLayers();
 
-    if (mode === "picker" && selectedPoint) {
-      const marker = L.marker([selectedPoint.lat, selectedPoint.lng], {
+    if (userLocation) {
+      const userMarker = L.marker([userLocation.lat, userLocation.lng], {
         icon: L.divIcon({
-          className: "bird-map-sight-pin-wrap",
-          html: buildPickerPinHtml(),
-          iconSize: [44, 64],
-          iconAnchor: [22, 64],
+          className: "bird-map-user-dot-wrap",
+          html: USER_DOT_HTML,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
         }),
         interactive: false,
+        zIndexOffset: 400,
       });
-      marker.addTo(layer);
-      return;
+      userMarker.addTo(layer);
     }
 
-    if (mode === "viewer") {
-      if (userLocation) {
-        const userMarker = L.marker([userLocation.lat, userLocation.lng], {
-          icon: L.divIcon({
-            className: "bird-map-user-dot-wrap",
-            html: USER_DOT_HTML,
-            iconSize: [18, 18],
-            iconAnchor: [9, 9],
-          }),
-          interactive: false,
-          zIndexOffset: 400,
-        });
-        userMarker.addTo(layer);
-      }
+    for (const point of points) {
+      const marker = L.marker([point.lat, point.lng], {
+        icon: L.divIcon({
+          className: "bird-map-sight-pin-wrap",
+          html: buildSightPinHtml(point.imageSrc, !!point.selected),
+          iconSize: [52, 72],
+          iconAnchor: [26, 72],
+        }),
+        zIndexOffset: mode === "picker" ? 200 : 0,
+      });
 
-      for (const point of points) {
-        const marker = L.marker([point.lat, point.lng], {
-          icon: L.divIcon({
-            className: "bird-map-sight-pin-wrap",
-            html: buildSightPinHtml(point.imageSrc, !!point.selected),
-            iconSize: [52, 72],
-            iconAnchor: [26, 72],
-          }),
-        });
-
+      if (mode === "viewer") {
         marker.bindPopup(buildPopupHtml(point.entries, point.count), {
           className: "bird-map-leaflet-popup",
           closeButton: true,
@@ -299,23 +286,41 @@ export function LocationMap({
             };
           }
         });
-
-        marker.addTo(layer);
+      } else {
+        marker.on("click", () => {
+          onPickRef.current?.({ lat: point.lat, lng: point.lng });
+        });
       }
 
-      if (fitToPoints && points.length > 0 && !hasFittedRef.current) {
-        const latLngs: [number, number][] = points.map((point) => [point.lat, point.lng]);
-        if (userLocation) {
-          latLngs.push([userLocation.lat, userLocation.lng]);
-        }
-        if (latLngs.length === 1) {
-          map.setView(latLngs[0], 15, { animate: false });
-        } else {
-          const bounds = L.latLngBounds(latLngs);
-          map.fitBounds(bounds.pad(0.22), { animate: false });
-        }
-        hasFittedRef.current = true;
+      marker.addTo(layer);
+    }
+
+    if (mode === "picker" && selectedPoint) {
+      const pickerMarker = L.marker([selectedPoint.lat, selectedPoint.lng], {
+        icon: L.divIcon({
+          className: "bird-map-sight-pin-wrap",
+          html: buildPickerPinHtml(),
+          iconSize: [44, 64],
+          iconAnchor: [22, 64],
+        }),
+        interactive: false,
+        zIndexOffset: 500,
+      });
+      pickerMarker.addTo(layer);
+    }
+
+    if (mode === "viewer" && fitToPoints && points.length > 0 && !hasFittedRef.current) {
+      const latLngs: [number, number][] = points.map((point) => [point.lat, point.lng]);
+      if (userLocation) {
+        latLngs.push([userLocation.lat, userLocation.lng]);
       }
+      if (latLngs.length === 1) {
+        map.setView(latLngs[0], 15, { animate: false });
+      } else {
+        const bounds = L.latLngBounds(latLngs);
+        map.fitBounds(bounds.pad(0.22), { animate: false });
+      }
+      hasFittedRef.current = true;
     }
 
     requestAnimationFrame(refreshMapView);

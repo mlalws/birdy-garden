@@ -2768,7 +2768,7 @@ select {
 
 .bird-ranking-item {
   display: grid;
-  grid-template-columns: 36px 1fr auto;
+  grid-template-columns: 36px 32px 1fr auto;
   align-items: center;
   gap: 8px;
   padding: 10px 12px;
@@ -2788,6 +2788,33 @@ select {
   font-weight: 900;
   text-align: center;
   color: #6b4426;
+}
+
+.bird-ranking-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(165deg, #e8dcc8 0%, #d4c4a8 100%);
+  border: 1.5px solid rgba(154, 104, 66, 0.45);
+}
+
+.bird-ranking-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bird-ranking-avatar-initial {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6b4426;
+  line-height: 1;
 }
 
 .bird-ranking-name {
