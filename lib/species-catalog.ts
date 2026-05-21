@@ -135,11 +135,20 @@ export function getListedSpeciesByRecord(record: BirdRecord | undefined): Listed
   return getListedSpeciesByName(label);
 }
 
-/** 연못 안(y ≥ 80) — w* 스프라이트는 이 구간에서만 */
-export const WATER_ZONE_Y_MIN = 80;
+/** background.jpg 연못 대략 영역 (왼쪽·오른쪽 물웅덩이) */
+const POND_LEFT = { xMin: 14, xMax: 54, yMin: 68, yMax: 88 };
+const POND_RIGHT = { xMin: 66, xMax: 96, yMin: 70, yMax: 94 };
 
-export function birdIsInWaterZone(bird: Pick<PlacedBird, "yPercent">): boolean {
-  return bird.yPercent >= WATER_ZONE_Y_MIN;
+/** @deprecated y만 쓰던 구버전 호환 */
+export const WATER_ZONE_Y_MIN = POND_LEFT.yMin;
+
+/** 푸른 물 위인지 — x·y로 연못 영역 판별 */
+export function birdIsInWaterZone(bird: Pick<PlacedBird, "xPercent" | "yPercent">): boolean {
+  const x = bird.xPercent;
+  const y = bird.yPercent;
+  const inLeft = x >= POND_LEFT.xMin && x <= POND_LEFT.xMax && y >= POND_LEFT.yMin && y <= POND_LEFT.yMax;
+  const inRight = x >= POND_RIGHT.xMin && x <= POND_RIGHT.xMax && y >= POND_RIGHT.yMin && y <= POND_RIGHT.yMax;
+  return inLeft || inRight;
 }
 
 export function speciesUsesSexSplit(listBirdId: string | null | undefined): boolean {
