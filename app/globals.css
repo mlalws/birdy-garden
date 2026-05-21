@@ -679,12 +679,28 @@ select {
   -webkit-overflow-scrolling: touch;
 }
 
+.bird-list-card-wrap {
+  margin-bottom: 12px;
+}
+
+.bird-list-card-wrap--selected .bird-list-card {
+  outline: 2px solid #6b4425;
+  outline-offset: 2px;
+}
+
+.bird-list-card-wrap .bird-list-card {
+  margin-bottom: 0;
+}
+
+.bird-list-card-wrap:has(.bird-list-card-actions) .bird-list-card {
+  border-radius: 14px 14px 0 0;
+}
+
 .bird-list-card {
   display: flex;
   align-items: stretch;
   gap: 12px;
   width: 100%;
-  margin-bottom: 12px;
   padding: 12px;
   border: 1px solid rgba(201, 165, 125, 0.85);
   border-radius: 14px;
@@ -700,8 +716,61 @@ select {
 }
 
 .bird-list-card--selected {
-  outline: 2px solid #6b4425;
-  outline-offset: 2px;
+  outline: none;
+}
+
+.bird-list-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px 10px;
+  border: 1px solid rgba(201, 165, 125, 0.85);
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  background: rgba(250, 240, 228, 0.95);
+}
+
+.bird-list-card-action-btn {
+  padding: 6px 12px;
+  border: 1px solid rgba(154, 104, 66, 0.55);
+  border-radius: 10px;
+  background: #fff9f4;
+  color: #5c3d24;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bird-list-card-action-btn--danger {
+  border-color: rgba(160, 72, 56, 0.55);
+  color: #8b3a2e;
+}
+
+.bird-list-card-confirm {
+  width: 100%;
+}
+
+.bird-list-card-confirm-text {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #4a3018;
+}
+
+.bird-list-card-confirm-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7a5a3a;
+  line-height: 1.4;
+}
+
+.bird-list-card-confirm-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .bird-list-thumb {
