@@ -84,11 +84,18 @@ import {
   loadUserGarden,
   saveUserGarden,
   type BirdRecord,
-  type CustomListBird,
   type DailyGardenArchive,
   type PlacedBird,
   type UserGardenPayload,
 } from "@/lib/supabase/garden";
+import {
+  deleteSharedListBird,
+  fetchSharedListBirds,
+  insertSharedListBird,
+  migrateLegacyCustomListBirdsToShared,
+  updateSharedListBird,
+  type SharedListBird,
+} from "@/lib/supabase/shared-list-birds";
 
 type MenuItem = {
   label: string;
@@ -102,6 +109,8 @@ type ListBird = {
   listBlurb?: string;
   isPlaceholder?: boolean;
   isCustom?: boolean;
+  /** 공용 목록 등록자 — 본인만 수정·삭제 */
+  createdBy?: string;
 };
 
 const BIRD_LIST_ITEMS: ListBird[] = LISTED_SPECIES.map((species) => ({
@@ -304,7 +313,7 @@ export default function Home() {
   const [dexSeenSpecies, setDexSeenSpecies] = useState<string[]>([]);
   const [gardenBirds, setGardenBirds] = useState<PlacedBird[]>([]);
   const [birdRecords, setBirdRecords] = useState<BirdRecord[]>([]);
-  const [customListBirds, setCustomListBirds] = useState<CustomListBird[]>([]);
+  const [sharedListBirds, setSharedListBirds] = useState<SharedListBird[]>([]);
   const [editingCustomListBirdId, setEditingCustomListBirdId] = useState<string | null>(null);
   const [customListDeleteConfirmId, setCustomListDeleteConfirmId] = useState<string | null>(null);
   const [isGardenHydrated, setIsGardenHydrated] = useState(false);
@@ -372,7 +381,7 @@ export default function Home() {
   const gardenSnapshotRef = useRef({
     gardenBirds,
     birdRecords,
-    customListBirds,
+    sharedListBirds,
     dexUnlockedSpecies,
     dexSeenSpecies,
     userProfile,
@@ -383,15 +392,16 @@ export default function Home() {
   const displayBirdListItems = useMemo<ListBird[]>(
     () => [
       ...BIRD_LIST_ITEMS,
-      ...customListBirds.map((custom) => ({
+      ...sharedListBirds.map((custom) => ({
         id: custom.id,
         name: custom.name,
         imageSrc: custom.imageSrc,
         listBlurb: shortenCustomListBlurb(custom.description),
         isCustom: true,
+        createdBy: custom.createdBy,
       })),
     ],
-    [customListBirds]
+    [sharedListBirds]
   );
 
   const todayDateKey = getKstDateKey();
@@ -679,7 +689,6 @@ export default function Home() {
     const archivesWithMap = mergeArchiveRecordMapCoords(migrated.dailyArchives) ?? {};
     setGardenBirds(normalizePlacedBirds(migrated.birds, recordsWithMap));
     setBirdRecords(recordsWithMap);
-    setCustomListBirds(migrated.customListBirds ?? []);
     setDexUnlockedSpecies(migrated.dexUnlockedSpecies ?? []);
     setDexSeenSpecies(migrated.dexSeenSpecies ?? []);
     setDailyArchives(archivesWithMap);
@@ -697,6 +706,7 @@ export default function Home() {
 
   const resetGuestGarden = () => {
     applyGardenPayload(EMPTY_GARDEN_PAYLOAD);
+    setSharedListBirds([]);
     guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
     clearLegacyGuestStorage();
   };
@@ -709,19 +719,19 @@ export default function Home() {
     gardenSnapshotRef.current = {
       gardenBirds,
       birdRecords,
-      customListBirds,
+      sharedListBirds,
       dexUnlockedSpecies,
       dexSeenSpecies,
       userProfile,
       dailyArchives,
       currentGardenDate,
     };
-  }, [gardenBirds, birdRecords, customListBirds, dexUnlockedSpecies, dexSeenSpecies, userProfile, dailyArchives, currentGardenDate]);
+  }, [gardenBirds, birdRecords, sharedListBirds, dexUnlockedSpecies, dexSeenSpecies, userProfile, dailyArchives, currentGardenDate]);
 
   const buildGardenPayloadFromSnapshot = (snapshot = gardenSnapshotRef.current): UserGardenPayload => ({
     birds: snapshot.gardenBirds,
     records: snapshot.birdRecords,
-    customListBirds: snapshot.customListBirds ?? [],
+    customListBirds: [],
     dexUnlockedSpecies: snapshot.dexUnlockedSpecies,
     dexSeenSpecies: snapshot.dexSeenSpecies,
     currentGardenDate: snapshot.currentGardenDate ?? getKstDateKey(),
@@ -755,6 +765,27 @@ export default function Home() {
     gardenDirtyRef.current = true;
   };
 
+  const refreshSharedListBirds = async (
+    uid: string,
+    legacyFromPayload: { id: string; name: string; description: string; imageSrc: string; createdAt: string }[] = []
+  ) => {
+    if (!isSupabaseConfigured()) {
+      setSharedListBirds([]);
+      return [];
+    }
+    try {
+      let shared = await fetchSharedListBirds();
+      if (legacyFromPayload.length > 0) {
+        shared = await migrateLegacyCustomListBirdsToShared(uid, legacyFromPayload, shared);
+      }
+      setSharedListBirds(shared);
+      return shared;
+    } catch (error) {
+      reportGardenSyncError(error);
+      return [];
+    }
+  };
+
   const dexDisplayEntries = useMemo(
     () => buildDexDisplayEntries(birdRecords, dailyArchives, dexUnlockedSpecies, dexSeenSpecies),
     [birdRecords, dailyArchives, dexUnlockedSpecies, dexSeenSpecies]
@@ -766,10 +797,10 @@ export default function Home() {
         ? getDexDetailDisplay(dexDetailSpecies, {
             records: birdRecords,
             archives: dailyArchives,
-            customListBirds,
+            customListBirds: sharedListBirds,
           })
         : null,
-    [dexDetailSpecies, birdRecords, dailyArchives, customListBirds]
+    [dexDetailSpecies, birdRecords, dailyArchives, sharedListBirds]
   );
 
   const dexDetailSightings = useMemo(() => {
@@ -851,15 +882,30 @@ export default function Home() {
         applyProfileDisplay(merged.profile ?? null, options?.emailFallback);
         loadedGardenUserIdRef.current = uid;
         gardenDirtyRef.current = false;
+        await refreshSharedListBirds(uid, hydratedPayload.customListBirds ?? []);
         return;
       }
+      const legacyCustom = hydratedPayload.customListBirds ?? [];
       const migratedPayload = applyGardenPayload(hydratedPayload);
+      const shared = await refreshSharedListBirds(uid, legacyCustom);
+      const dexFromGarden = buildDexStateFromGarden(
+        migratedPayload.records,
+        migratedPayload.dailyArchives,
+        shared,
+        migratedPayload.dexSeenSpecies ?? []
+      );
+      setDexUnlockedSpecies(dexFromGarden.dexUnlockedSpecies);
+      setDexSeenSpecies(dexFromGarden.dexSeenSpecies);
       applyProfileDisplay(migratedPayload.profile ?? null, options?.emailFallback);
       loadedGardenUserIdRef.current = uid;
       setGardenSyncError("");
-      const needsSave = didRollover || needsRepairSave || gardenPayloadNeedsMigration(hydratedPayload);
+      const needsSave =
+        didRollover ||
+        needsRepairSave ||
+        gardenPayloadNeedsMigration(hydratedPayload) ||
+        legacyCustom.length > 0;
       if (needsSave) {
-        await saveUserGarden(uid, migratedPayload);
+        await saveUserGarden(uid, { ...migratedPayload, customListBirds: [] });
         gardenDirtyRef.current = false;
       } else {
         gardenDirtyRef.current = false;
@@ -1222,8 +1268,8 @@ export default function Home() {
     );
 
   const openEditCustomListBird = (listBirdId: string) => {
-    const custom = customListBirds.find((entry) => entry.id === listBirdId);
-    if (!custom) {
+    const custom = sharedListBirds.find((entry) => entry.id === listBirdId);
+    if (!custom || !userId || custom.createdBy !== userId) {
       return;
     }
     setCustomListDeleteConfirmId(null);
@@ -1249,10 +1295,15 @@ export default function Home() {
   };
 
   const confirmDeleteCustomListBird = async (listBirdId: string) => {
+    const target = sharedListBirds.find((entry) => entry.id === listBirdId);
+    if (!target || !userId || target.createdBy !== userId) {
+      return;
+    }
+
     const recordIdsToRemove = new Set(
       birdRecords.filter((record) => record.listBirdId === listBirdId).map((record) => record.id)
     );
-    const nextCustom = customListBirds.filter((entry) => entry.id !== listBirdId);
+    const nextCustom = sharedListBirds.filter((entry) => entry.id !== listBirdId);
     const nextRecords = birdRecords.filter((record) => record.listBirdId !== listBirdId);
     const nextBirds = gardenBirds.filter(
       (bird) => !bird.recordId || !recordIdsToRemove.has(bird.recordId)
@@ -1272,7 +1323,7 @@ export default function Home() {
 
     const nextDex = buildDexStateFromGarden(nextRecords, nextArchives, nextCustom, dexSeenSpecies);
 
-    setCustomListBirds(nextCustom);
+    setSharedListBirds(nextCustom);
     setBirdRecords(nextRecords);
     setGardenBirds(nextBirds);
     setDailyArchives(nextArchives);
@@ -1286,7 +1337,7 @@ export default function Home() {
     const payload: UserGardenPayload = {
       birds: nextBirds,
       records: nextRecords,
-      customListBirds: nextCustom,
+      customListBirds: [],
       dailyArchives: nextArchives,
       dexUnlockedSpecies: nextDex.dexUnlockedSpecies,
       dexSeenSpecies: nextDex.dexSeenSpecies,
@@ -1298,7 +1349,7 @@ export default function Home() {
       ...gardenSnapshotRef.current,
       gardenBirds: nextBirds,
       birdRecords: nextRecords,
-      customListBirds: nextCustom,
+      sharedListBirds: nextCustom,
       dailyArchives: nextArchives,
       dexUnlockedSpecies: nextDex.dexUnlockedSpecies,
       dexSeenSpecies: nextDex.dexSeenSpecies,
@@ -1306,6 +1357,7 @@ export default function Home() {
 
     if (userId) {
       try {
+        await deleteSharedListBird(listBirdId);
         await persistGarden(userId, payload);
         gardenDirtyRef.current = false;
         if (isSupabaseConfigured()) {
@@ -1332,7 +1384,7 @@ export default function Home() {
     if (!item || item.isPlaceholder) {
       return;
     }
-    const custom = customListBirds.find((entry) => entry.id === item.id);
+    const custom = sharedListBirds.find((entry) => entry.id === item.id);
     if (custom) {
       openBirdRegistration({
         name: custom.name,
@@ -1346,94 +1398,98 @@ export default function Home() {
     openBirdRegistration({ name: item.name, mode: "listed", listBirdId: item.id });
   };
 
-  const persistCustomListBirds = async (nextCustom: CustomListBird[]) => {
-    markGardenDirty();
-    const payload = { ...buildGardenPayloadFromSnapshot(), customListBirds: nextCustom };
-    if (userId) {
-      try {
-        await persistGarden(userId, payload);
-      } catch (error) {
-        reportGardenSyncError(error);
-      }
-    } else {
-      guestSessionPayloadRef.current = payload;
-    }
-  };
-
   const submitCustomBirdToList = async () => {
     const name = birdName.trim();
     if (!name || !photoPreviewUrl) {
+      return;
+    }
+    if (!userId || !isSupabaseConfigured()) {
+      setLoginMessage("공용 목록에 올리려면 로그인이 필요해요.");
+      setIsBirdInfoScreenOpen(false);
+      openLoginScreen();
       return;
     }
     const description = birdFeature.trim();
 
     if (editingCustomListBirdId) {
       const editId = editingCustomListBirdId;
-      const nextCustom = customListBirds.map((entry) =>
-        entry.id === editId
-          ? { ...entry, name, description, imageSrc: photoPreviewUrl }
-          : entry
-      );
-      const nextRecords = patchRecordsForCustomListBird(birdRecords, editId, {
-        name,
-        description,
-        imageSrc: photoPreviewUrl,
-      });
-      const nextArchives: Record<string, DailyGardenArchive> = {};
-      for (const [dateKey, archive] of Object.entries(dailyArchives)) {
-        nextArchives[dateKey] = {
-          ...archive,
-          records: patchRecordsForCustomListBird(archive.records, editId, {
-            name,
-            description,
-            imageSrc: photoPreviewUrl,
-          }),
-        };
+      const existing = sharedListBirds.find((entry) => entry.id === editId);
+      if (!existing || existing.createdBy !== userId) {
+        return;
       }
-
-      setCustomListBirds(nextCustom);
-      setBirdRecords(nextRecords);
-      setDailyArchives(nextArchives);
-      setIsBirdInfoScreenOpen(false);
-      resetBirdFormDraft();
-      setRegistrationSpeciesName(name);
-      setIsBirdListOpen(true);
-      setSelectedListBirdId(editId);
-
-      markGardenDirty();
-      const payload = {
-        ...buildGardenPayloadFromSnapshot(),
-        customListBirds: nextCustom,
-        records: nextRecords,
-        dailyArchives: nextArchives,
-      };
-      if (userId) {
-        try {
-          await persistGarden(userId, payload);
-        } catch (error) {
-          reportGardenSyncError(error);
+      try {
+        const updated = await updateSharedListBird(editId, {
+          name,
+          description,
+          imageSrc: photoPreviewUrl,
+        });
+        const nextCustom = sharedListBirds.map((entry) => (entry.id === editId ? updated : entry));
+        const nextRecords = patchRecordsForCustomListBird(birdRecords, editId, {
+          name,
+          description,
+          imageSrc: photoPreviewUrl,
+        });
+        const nextArchives: Record<string, DailyGardenArchive> = {};
+        for (const [dateKey, archive] of Object.entries(dailyArchives)) {
+          nextArchives[dateKey] = {
+            ...archive,
+            records: patchRecordsForCustomListBird(archive.records, editId, {
+              name,
+              description,
+              imageSrc: photoPreviewUrl,
+            }),
+          };
         }
-      } else {
-        guestSessionPayloadRef.current = payload;
+
+        setSharedListBirds(nextCustom);
+        setBirdRecords(nextRecords);
+        setDailyArchives(nextArchives);
+        setIsBirdInfoScreenOpen(false);
+        resetBirdFormDraft();
+        setRegistrationSpeciesName(name);
+        setIsBirdListOpen(true);
+        setSelectedListBirdId(editId);
+
+        await persistGarden(userId, {
+          birds: gardenBirds,
+          records: nextRecords,
+          customListBirds: [],
+          dailyArchives: nextArchives,
+          dexUnlockedSpecies,
+          dexSeenSpecies,
+          currentGardenDate,
+          ...(userProfile ? { profile: userProfile } : {}),
+        });
+        gardenDirtyRef.current = false;
+      } catch (error) {
+        reportGardenSyncError(error);
       }
       return;
     }
 
-    const entry: CustomListBird = {
-      id: `custom-${Date.now()}`,
-      name,
-      description,
-      imageSrc: photoPreviewUrl,
-      createdAt: new Date().toISOString(),
-    };
-    const nextCustom = [...customListBirds, entry];
-    setCustomListBirds(nextCustom);
-    setIsBirdInfoScreenOpen(false);
-    resetBirdFormDraft();
-    setRegistrationSpeciesName(name);
-    setIsBirdListOpen(true);
-    setSelectedListBirdId(entry.id);
-    void persistCustomListBirds(nextCustom);
+    try {
+      const entry = await insertSharedListBird(userId, {
+        name,
+        description,
+        imageSrc: photoPreviewUrl,
+      });
+      const nextCustom = [...sharedListBirds, entry];
+      setSharedListBirds(nextCustom);
+      const dexFromList = buildDexStateFromGarden(
+        birdRecords,
+        dailyArchives,
+        nextCustom,
+        dexSeenSpecies
+      );
+      setDexUnlockedSpecies(dexFromList.dexUnlockedSpecies);
+      setIsBirdInfoScreenOpen(false);
+      resetBirdFormDraft();
+      setRegistrationSpeciesName(name);
+      setIsBirdListOpen(true);
+      setSelectedListBirdId(entry.id);
+    } catch (error) {
+      reportGardenSyncError(error);
+    }
   };
 
   const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -2020,7 +2076,7 @@ export default function Home() {
   const submitBirdRegistration = async () => {
     const isUnlisted = birdRegistrationMode === "unlisted";
     const customEntry = isCustomListBirdId(selectedListBirdId)
-      ? customListBirds.find((entry) => entry.id === selectedListBirdId)
+      ? sharedListBirds.find((entry) => entry.id === selectedListBirdId)
       : undefined;
     const usesSexSplit = !isUnlisted && !customEntry && speciesUsesSexSplit(selectedListBirdId);
     const maleCount = usesSexSplit ? Math.max(0, birdMaleCount) : 0;
@@ -2085,7 +2141,7 @@ export default function Home() {
     const savePayload: UserGardenPayload = {
       birds: nextBirds,
       records: nextRecords,
-      customListBirds,
+      customListBirds: [],
       dexUnlockedSpecies: nextUnlocked,
       dexSeenSpecies: nextSeen,
       currentGardenDate,
@@ -2818,12 +2874,14 @@ export default function Home() {
                         {item.listBlurb ? <p className="bird-list-blurb">{item.listBlurb}</p> : null}
                       </div>
                     </button>
-                    {item.isCustom ? (
+                    {item.isCustom && item.createdBy && userId && item.createdBy === userId ? (
                       <div className="bird-list-card-actions">
                         {customListDeleteConfirmId === item.id ? (
                           <div className="bird-list-card-confirm">
                             <p className="bird-list-card-confirm-text">목록에서 삭제할까요?</p>
-                            <p className="bird-list-card-confirm-hint">정원에 둔 이 종의 새·기록도 함께 삭제돼요.</p>
+                            <p className="bird-list-card-confirm-hint">
+                              모든 사용자 목록·도감에서 사라지며, 내 정원에 둔 이 종의 새·기록도 함께 삭제돼요.
+                            </p>
                             <div className="bird-list-card-confirm-btns">
                               <button
                                 type="button"

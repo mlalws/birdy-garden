@@ -71,3 +71,49 @@ create policy "Users update own weekly ranking"
   to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+-- 전체 사용자 공용 조류 목록 (리스트에 없는 조류 추가)
+create table if not exists public.shared_list_birds (
+  id text primary key,
+  created_by uuid not null references auth.users (id) on delete cascade,
+  name text not null,
+  description text not null default '',
+  image_src text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists shared_list_birds_created_at_idx
+  on public.shared_list_birds (created_at asc);
+
+alter table public.shared_list_birds enable row level security;
+
+drop policy if exists "Authenticated read shared list birds" on public.shared_list_birds;
+drop policy if exists "Users insert own shared list birds" on public.shared_list_birds;
+drop policy if exists "Users update own shared list birds" on public.shared_list_birds;
+drop policy if exists "Users delete own shared list birds" on public.shared_list_birds;
+
+create policy "Authenticated read shared list birds"
+  on public.shared_list_birds
+  for select
+  to authenticated
+  using (true);
+
+create policy "Users insert own shared list birds"
+  on public.shared_list_birds
+  for insert
+  to authenticated
+  with check (auth.uid() = created_by);
+
+create policy "Users update own shared list birds"
+  on public.shared_list_birds
+  for update
+  to authenticated
+  using (auth.uid() = created_by)
+  with check (auth.uid() = created_by);
+
+create policy "Users delete own shared list birds"
+  on public.shared_list_birds
+  for delete
+  to authenticated
+  using (auth.uid() = created_by);

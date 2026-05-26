@@ -45,13 +45,15 @@ export type DailyGardenArchive = {
   savedAt: string;
 };
 
-/** 신규 조류 등록 → 추가하기 목록에만 먼저 올라가는 사용자 정의 종 */
+/** 신규 조류 등록 → 전체 사용자 공용 목록 종 */
 export type CustomListBird = {
   id: string;
   name: string;
   description: string;
   imageSrc: string;
   createdAt: string;
+  /** 공용 목록 등록자 — 본인만 수정·삭제 */
+  createdBy?: string;
 };
 
 export type UserGardenPayload = {
