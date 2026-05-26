@@ -26,6 +26,30 @@ function rowToSharedListBird(row: SharedListBirdRow): SharedListBird {
   };
 }
 
+const SHARED_LIST_SYNC_SESSION_KEY = "birdy-garden:shared-list-global-sync-v1";
+
+/** 모든 사용자 정원 payload에 남은 customListBirds를 공용 테이블로 연동 */
+export async function syncSharedListBirdsFromAllGardens(): Promise<number> {
+  if (!isSupabaseConfigured()) {
+    return 0;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase.rpc("sync_shared_list_birds_from_all_gardens");
+
+  if (error) {
+    if (
+      error.message.includes("sync_shared_list_birds_from_all_gardens") &&
+      (error.message.includes("does not exist") || error.message.includes("Could not find"))
+    ) {
+      return 0;
+    }
+    throw error;
+  }
+
+  return typeof data === "number" ? data : 0;
+}
+
 export async function fetchSharedListBirds(): Promise<SharedListBird[]> {
   if (!isSupabaseConfigured()) {
     return [];
@@ -149,4 +173,20 @@ export async function migrateLegacyCustomListBirdsToShared(
   }
 
   return next.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** 로그인 후 세션당 1회 — 다른 사용자가 예전에 넣은 목록까지 공용 테이블로 모음 */
+export async function ensureGlobalSharedListSync(): Promise<void> {
+  if (!isSupabaseConfigured() || typeof window === "undefined") {
+    return;
+  }
+  try {
+    if (sessionStorage.getItem(SHARED_LIST_SYNC_SESSION_KEY) === "1") {
+      return;
+    }
+    await syncSharedListBirdsFromAllGardens();
+    sessionStorage.setItem(SHARED_LIST_SYNC_SESSION_KEY, "1");
+  } catch {
+    // RPC·테이블 미준비 시 무시 — 개인 legacy 마이그레이션만 진행
+  }
 }

@@ -90,6 +90,7 @@ import {
 } from "@/lib/supabase/garden";
 import {
   deleteSharedListBird,
+  ensureGlobalSharedListSync,
   fetchSharedListBirds,
   insertSharedListBird,
   migrateLegacyCustomListBirdsToShared,
@@ -774,6 +775,7 @@ export default function Home() {
       return [];
     }
     try {
+      await ensureGlobalSharedListSync();
       let shared = await fetchSharedListBirds();
       if (legacyFromPayload.length > 0) {
         shared = await migrateLegacyCustomListBirdsToShared(uid, legacyFromPayload, shared);
