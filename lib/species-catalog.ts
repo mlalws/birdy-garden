@@ -143,9 +143,9 @@ export function getListedSpeciesByRecord(record: BirdRecord | undefined): Listed
   return getListedSpeciesByName(label);
 }
 
-/** background.jpg 연못 대략 영역 (왼쪽·오른쪽 물웅덩이) */
-const POND_LEFT = { xMin: 14, xMax: 54, yMin: 68, yMax: 88 };
-const POND_RIGHT = { xMin: 66, xMax: 96, yMin: 70, yMax: 94 };
+/** background.jpg 연못 대략 영역 (왼쪽·오른쪽 물웅덩이) — y 73 미만은 잔디·물가 */
+const POND_LEFT = { xMin: 14, xMax: 54, yMin: 73, yMax: 88 };
+const POND_RIGHT = { xMin: 66, xMax: 96, yMin: 73, yMax: 94 };
 
 /** @deprecated y만 쓰던 구버전 호환 */
 export const WATER_ZONE_Y_MIN = POND_LEFT.yMin;
@@ -324,7 +324,7 @@ export function speciesHasWaterSprite(species: ListedSpecies | null | undefined)
   return !!species?.waterImageSrc;
 }
 
-/** 화면용 inWater — 연못(x·y) 안이면 w*, 밖이면 duck/g*·ang·haeyo 등 */
+/** 화면용 inWater — 연못 물 안이면 w*, 잔디·물가(inWater false)이면 duck/g* */
 export function resolveBirdInWater(
   bird: Pick<PlacedBird, "xPercent" | "yPercent" | "inWater">,
   record?: BirdRecord | null
@@ -332,9 +332,12 @@ export function resolveBirdInWater(
   if (record && recordMustStayOnLand(record)) {
     return false;
   }
+  if (bird.inWater === false) {
+    return false;
+  }
   const species = getListedSpeciesByRecord(record ?? undefined);
   if (speciesHasWaterSprite(species)) {
-    return birdIsInWaterZone(bird);
+    return bird.inWater === true && birdIsInWaterZone(bird);
   }
   return bird.inWater === true;
 }

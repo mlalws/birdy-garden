@@ -238,6 +238,9 @@ function syncWaterfowlSpriteFlag(bird: PlacedBird, record?: BirdRecord): PlacedB
   if (!record || !recordMustStayNearWater(record)) {
     return bird;
   }
+  if (bird.inWater === false) {
+    return bird;
+  }
   return {
     ...bird,
     inWater: birdIsInWaterZone(bird),
