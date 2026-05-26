@@ -34,6 +34,7 @@ import {
   buildCalendarCells,
   computeDayBirdStats,
   countLifetimeSpeciesSightings,
+  createdAtForDateKey,
   dateKeyHasGarden,
   formatMonthLabel,
   getKstDateKey,
@@ -345,6 +346,8 @@ export default function Home() {
   const [archiveGardenReturnTarget, setArchiveGardenReturnTarget] = useState<ArchiveGardenReturnTarget | null>(
     null
   );
+  /** 캘린더 이날의 정원에서 추가하기 플로우 — 해당 날짜 아카이브에 저장 */
+  const [archiveAddFlowDateKey, setArchiveAddFlowDateKey] = useState<string | null>(null);
   const [dailyArchives, setDailyArchives] = useState<Record<string, DailyGardenArchive>>({});
   const [currentGardenDate, setCurrentGardenDate] = useState(() => getKstDateKey());
   const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -421,8 +424,24 @@ export default function Home() {
     if (!isArchiveGardenOpen) {
       return null;
     }
-    return resolveDaySnapshot(selectedCalendarDateKey, dailyArchives, { birds: gardenBirds, records: birdRecords });
+    return (
+      resolveDaySnapshot(selectedCalendarDateKey, dailyArchives, {
+        birds: gardenBirds,
+        records: birdRecords,
+      }) ?? {
+        birds: [],
+        records: [],
+        savedAt: new Date().toISOString(),
+      }
+    );
   }, [isArchiveGardenOpen, selectedCalendarDateKey, dailyArchives, gardenBirds, birdRecords]);
+
+  const showArchiveGardenScreen =
+    isArchiveGardenOpen &&
+    archiveViewSnapshot !== null &&
+    !isBirdListOpen &&
+    !isBirdInfoScreenOpen &&
+    registrationConfirm === null;
 
   useLayoutEffect(() => {
     if (!isArchiveGardenOpen) {
@@ -1770,12 +1789,22 @@ export default function Home() {
   };
 
   const openArchiveGarden = () => {
-    if (!selectedDaySnapshot || selectedDaySnapshot.birds.length === 0) {
+    if (selectedCalendarDateKey > todayDateKey) {
       return;
     }
     setArchiveGardenReturnTarget({ type: "calendar" });
+    setArchiveAddFlowDateKey(null);
     setIsArchiveGardenOpen(true);
     setIsCalendarOpen(false);
+  };
+
+  const openBirdListFromArchive = () => {
+    if (!isArchiveGardenOpen || selectedCalendarDateKey > todayDateKey) {
+      return;
+    }
+    setArchiveAddFlowDateKey(selectedCalendarDateKey);
+    closeGardenBirdDetail();
+    openBirdList();
   };
 
   const closeArchiveGarden = () => {
@@ -1783,6 +1812,7 @@ export default function Home() {
     closeGardenBirdDetail();
     setIsArchiveGardenOpen(false);
     setArchiveGardenReturnTarget(null);
+    setArchiveAddFlowDateKey(null);
 
     if (returnTarget?.type === "dex-detail") {
       setIsDexOpen(true);
@@ -1832,10 +1862,16 @@ export default function Home() {
   };
 
   const closeRegistrationConfirm = () => {
+    const returnToArchive = !!archiveAddFlowDateKey;
     setRegistrationConfirm(null);
     setIsBirdListOpen(false);
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
+    setArchiveAddFlowDateKey(null);
+    if (returnToArchive) {
+      setIsArchiveGardenOpen(true);
+      setIsCalendarOpen(false);
+    }
   };
 
   const closeGardenBirdDetail = () => {
@@ -2096,7 +2132,20 @@ export default function Home() {
       : isUnlisted
         ? displayName
         : registrationSpeciesName?.trim() || displayName;
-    const newBirds = createGardenBirds(gardenBirds.length, recordId, {
+    const archiveDateKey = archiveAddFlowDateKey;
+    const isAddingToPastArchive = !!archiveDateKey && archiveDateKey < todayDateKey;
+    const recordCreatedAt = isAddingToPastArchive
+      ? createdAtForDateKey(archiveDateKey)
+      : new Date().toISOString();
+
+    const baseBirds = isAddingToPastArchive
+      ? (dailyArchives[archiveDateKey]?.birds ?? [])
+      : gardenBirds;
+    const baseRecords = isAddingToPastArchive
+      ? (dailyArchives[archiveDateKey]?.records ?? [])
+      : birdRecords;
+
+    const newBirds = createGardenBirds(baseBirds.length, recordId, {
       listBirdId: isUnlisted ? undefined : selectedListBirdId,
       speciesName: speciesNameForConfirm,
       ...(usesSexSplit ? { maleCount, femaleCount } : { count: amount }),
@@ -2112,12 +2161,14 @@ export default function Home() {
       ...(usesSexSplit ? { maleCount, femaleCount } : {}),
       latitude: pickedLocation?.lat ?? mapCenter.lat,
       longitude: pickedLocation?.lng ?? mapCenter.lng,
-      createdAt: new Date().toISOString(),
+      createdAt: recordCreatedAt,
     };
-    const nextRecords = [...birdRecords, newRecord];
-    const nextBirds = normalizePlacedBirds([...gardenBirds, ...newBirds], nextRecords);
+    const nextRecords = [...baseRecords, newRecord];
+    const nextBirds = normalizePlacedBirds([...baseBirds, ...newBirds], nextRecords);
     const previousSightings = countLifetimeSpeciesSightings(birdRecords, dailyArchives, speciesNameForConfirm);
-    const totalSightings = countLifetimeSpeciesSightings(nextRecords, dailyArchives, speciesNameForConfirm);
+    const totalSightings = isAddingToPastArchive
+      ? countLifetimeSpeciesSightings(birdRecords, { ...dailyArchives, [archiveDateKey]: { birds: nextBirds, records: nextRecords, savedAt: new Date().toISOString() } }, speciesNameForConfirm)
+      : countLifetimeSpeciesSightings(nextRecords, dailyArchives, speciesNameForConfirm);
     const isFirstDiscovery = previousSightings === 0;
     const fallbackImageSrc = customEntry?.imageSrc ?? getSpeciesFallbackImageSrc(speciesNameForConfirm);
 
@@ -2133,31 +2184,46 @@ export default function Home() {
     const savedLng = pickedLocation?.lng ?? mapCenter.lng;
     saveRecordMapCoord(recordId, { lat: savedLat, lng: savedLng });
 
-    setGardenBirds(nextBirds);
-    setBirdRecords(nextRecords);
+    let nextArchives = dailyArchives;
+    if (isAddingToPastArchive && archiveDateKey) {
+      nextArchives = {
+        ...dailyArchives,
+        [archiveDateKey]: {
+          birds: nextBirds,
+          records: nextRecords,
+          savedAt: new Date().toISOString(),
+        },
+      };
+      setDailyArchives(nextArchives);
+    } else {
+      setGardenBirds(nextBirds);
+      setBirdRecords(nextRecords);
+    }
     if (speciesLabel.length > 0) {
       setDexUnlockedSpecies(nextUnlocked);
       setDexSeenSpecies(nextSeen);
     }
 
     const savePayload: UserGardenPayload = {
-      birds: nextBirds,
-      records: nextRecords,
+      birds: isAddingToPastArchive ? gardenBirds : nextBirds,
+      records: isAddingToPastArchive ? birdRecords : nextRecords,
       customListBirds: [],
       dexUnlockedSpecies: nextUnlocked,
       dexSeenSpecies: nextSeen,
       currentGardenDate,
-      dailyArchives,
+      dailyArchives: nextArchives,
       ...(userProfile ? { profile: userProfile } : {}),
     };
 
     gardenSnapshotRef.current = {
       ...gardenSnapshotRef.current,
-      gardenBirds: nextBirds,
-      birdRecords: nextRecords,
+      gardenBirds: isAddingToPastArchive ? gardenBirds : nextBirds,
+      birdRecords: isAddingToPastArchive ? birdRecords : nextRecords,
+      dailyArchives: nextArchives,
       dexUnlockedSpecies: nextUnlocked,
       dexSeenSpecies: nextSeen,
     };
+    markGardenDirty();
 
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
@@ -2186,6 +2252,13 @@ export default function Home() {
           if (rankingResult) {
             weeklyRankBanner = weeklyRankBannerMessage(rankingResult);
           }
+          await syncWeeklyRankingFromGarden(
+            userId,
+            profileUsername.trim() || "탐험가",
+            savePayload.records,
+            savePayload.dailyArchives,
+            profileAvatarUrl
+          );
         } catch (error) {
           markGardenDirty();
           reportGardenSyncError(error);
@@ -3332,14 +3405,14 @@ export default function Home() {
               ) : null}
 
               <button type="button" className="bird-confirm-home-btn" onClick={closeRegistrationConfirm}>
-                홈으로 가기
+                {archiveAddFlowDateKey ? "정원으로 돌아가기" : "홈으로 가기"}
               </button>
             </div>
           </div>
         ) : null}
 
 
-        {isArchiveGardenOpen && archiveViewSnapshot ? (
+        {showArchiveGardenScreen && archiveViewSnapshot ? (
           <div className="bird-archive-garden-screen" role="dialog" aria-modal="true" aria-label="이날의 정원">
             <header className="bird-archive-garden-header">
               <button
@@ -3355,6 +3428,14 @@ export default function Home() {
               <h1 className="bird-archive-garden-title">
                 {parseDateKey(selectedCalendarDateKey).month}월 {parseDateKey(selectedCalendarDateKey).day}일의 정원
               </h1>
+              <button
+                type="button"
+                className="bird-archive-garden-add"
+                onClick={openBirdListFromArchive}
+                aria-label="이날의 정원에 조류 추가"
+              >
+                추가하기
+              </button>
             </header>
             <div className="garden-scroll bird-archive-garden-scroll" ref={archiveScrollRef}>
               <GardenWorldView
@@ -3467,7 +3548,7 @@ export default function Home() {
                     type="button"
                     className="bird-calendar-view-link"
                     onClick={openArchiveGarden}
-                    disabled={!selectedDaySnapshot || selectedDaySnapshot.birds.length === 0}
+                    disabled={selectedCalendarDateKey > todayDateKey}
                   >
                     이날의 정원 보기
                   </button>

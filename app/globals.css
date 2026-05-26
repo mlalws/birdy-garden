@@ -3475,11 +3475,30 @@ select {
 }
 
 .bird-archive-garden-title {
-  margin: 6px 52px 4px;
+  margin: 6px 52px 4px 72px;
   text-align: center;
   font-size: 16px;
   font-weight: 800;
   color: #4a3018;
+}
+
+.bird-archive-garden-add {
+  position: absolute;
+  right: 10px;
+  top: calc(10px + env(safe-area-inset-top, 0px));
+  padding: 6px 10px;
+  border: 1px solid rgba(139, 94, 60, 0.55);
+  border-radius: 10px;
+  background: rgba(255, 252, 245, 0.95);
+  color: #5c3d24;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(86, 56, 34, 0.12);
+}
+
+.bird-archive-garden-add:active {
+  transform: scale(0.98);
 }
 
 .bird-archive-garden-scroll {

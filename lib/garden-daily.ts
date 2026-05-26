@@ -23,6 +23,13 @@ export function parseDateKey(key: string): { year: number; month: number; day: n
   return { year, month, day };
 }
 
+/** 캘린더 과거 날짜에 조류 등록 시 createdAt — KST 정오 */
+export function createdAtForDateKey(dateKey: string): string {
+  const { year, month, day } = parseDateKey(dateKey);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${year}-${pad(month)}-${pad(day)}T12:00:00+09:00`;
+}
+
 export function formatMonthLabel(year: number, month: number): string {
   return `${month}월 ${year}`;
 }
