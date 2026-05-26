@@ -8,7 +8,12 @@ import {
   getListedSpeciesByName,
   speciesUsesSexSplit,
 } from "@/lib/species-catalog";
-import type { BirdRecord, DailyGardenArchive, UserGardenPayload } from "@/lib/supabase/garden";
+import type {
+  BirdRecord,
+  CustomListBird,
+  DailyGardenArchive,
+  UserGardenPayload,
+} from "@/lib/supabase/garden";
 
 /** 예전 빌드에서 저장된 별명 → 목록 종 */
 const LEGACY_NICKNAME_TO_LIST: Record<string, { speciesName: string; listBirdId: string }> = {
@@ -169,6 +174,25 @@ const normalizeDexSpeciesLabel = (name: string): string | null => {
   return listed?.name ?? trimmed;
 };
 
+/** 정원·목록에 실제로 남아 있는 종만 도감 해금/열람 목록으로 맞춤 */
+export function buildDexStateFromGarden(
+  records: BirdRecord[],
+  archives: Record<string, DailyGardenArchive> | undefined,
+  customListBirds: CustomListBird[],
+  previousSeen: string[] = []
+): { dexUnlockedSpecies: string[]; dexSeenSpecies: string[] } {
+  const activeLabels = new Set(collectSpeciesLabelsFromGarden(records, archives));
+  for (const entry of customListBirds) {
+    const name = entry.name.trim();
+    if (name) {
+      activeLabels.add(name);
+    }
+  }
+  const dexUnlockedSpecies = [...activeLabels];
+  const dexSeenSpecies = previousSeen.filter((name) => activeLabels.has(name.trim()));
+  return { dexUnlockedSpecies, dexSeenSpecies };
+}
+
 export function collectSpeciesLabelsFromGarden(
   records: BirdRecord[],
   archives: Record<string, DailyGardenArchive> | undefined
@@ -252,19 +276,21 @@ function normalizeArchiveBirds(archives: Record<string, DailyGardenArchive> | un
 export function migrateGardenPayload(payload: UserGardenPayload): UserGardenPayload {
   const records = migrateBirdRecords(payload.records);
   const dailyArchives = normalizeArchiveBirds(migrateArchives(payload.dailyArchives));
+  const customListBirds = payload.customListBirds ?? [];
+  const dex = buildDexStateFromGarden(
+    records,
+    dailyArchives,
+    customListBirds,
+    migrateDexSeenSpecies(payload.dexSeenSpecies, records)
+  );
   return {
     ...payload,
     records,
     birds: normalizePlacedBirds(payload.birds, records),
     dailyArchives,
-    customListBirds: payload.customListBirds ?? [],
-    dexUnlockedSpecies: migrateDexUnlockedSpecies(
-      payload.dexUnlockedSpecies,
-      payload.dexSeenSpecies,
-      records,
-      dailyArchives
-    ),
-    dexSeenSpecies: migrateDexSeenSpecies(payload.dexSeenSpecies, records),
+    customListBirds,
+    dexUnlockedSpecies: dex.dexUnlockedSpecies,
+    dexSeenSpecies: dex.dexSeenSpecies,
   };
 }
 

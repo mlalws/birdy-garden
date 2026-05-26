@@ -226,22 +226,23 @@ export async function loadUserGarden(userId: string): Promise<UserGardenPayload>
   return normalizePayload(data.payload);
 }
 
-/** 부분 저장 시 dailyArchives 등이 사라지지 않도록 기존 payload와 합칩니다 */
+/**
+ * 저장 직전 병합 — 클라이언트 스냅샷(incoming)을 기준으로 덮어씁니다.
+ * 예전 union 병합은 목록·도감 삭제가 새로고침 후 되살아나는 원인이었습니다.
+ */
 export function mergeGardenPayload(existing: UserGardenPayload, incoming: UserGardenPayload): UserGardenPayload {
   return {
     birds: incoming.birds,
     records: incoming.records,
-    dexUnlockedSpecies: [...new Set([...(existing.dexUnlockedSpecies ?? []), ...(incoming.dexUnlockedSpecies ?? [])])],
-    dexSeenSpecies: [...new Set([...(existing.dexSeenSpecies ?? []), ...(incoming.dexSeenSpecies ?? [])])],
+    customListBirds: incoming.customListBirds ?? [],
+    dexUnlockedSpecies: incoming.dexUnlockedSpecies ?? [],
+    dexSeenSpecies: incoming.dexSeenSpecies ?? [],
     profile: incoming.profile ?? existing.profile,
     currentGardenDate: incoming.currentGardenDate ?? existing.currentGardenDate ?? undefined,
     dailyArchives: {
       ...(existing.dailyArchives ?? {}),
       ...(incoming.dailyArchives ?? {}),
     },
-    customListBirds: [...(existing.customListBirds ?? []), ...(incoming.customListBirds ?? [])].filter(
-      (item, index, arr) => arr.findIndex((other) => other.id === item.id) === index
-    ),
   };
 }
 

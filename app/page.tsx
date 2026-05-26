@@ -67,6 +67,7 @@ import {
   applyRecordCountChange,
   collectSpeciesLabelsFromGarden,
   gardenPayloadNeedsMigration,
+  buildDexStateFromGarden,
   migrateGardenPayload,
 } from "@/lib/garden-records";
 import { formatKstWeekLabel, formatKstWeekPeriod, getKstWeekKey } from "@/lib/garden-weekly";
@@ -1269,26 +1270,44 @@ export default function Home() {
       };
     }
 
+    const nextDex = buildDexStateFromGarden(nextRecords, nextArchives, nextCustom, dexSeenSpecies);
+
     setCustomListBirds(nextCustom);
     setBirdRecords(nextRecords);
     setGardenBirds(nextBirds);
     setDailyArchives(nextArchives);
+    setDexUnlockedSpecies(nextDex.dexUnlockedSpecies);
+    setDexSeenSpecies(nextDex.dexSeenSpecies);
     setCustomListDeleteConfirmId(null);
     if (selectedListBirdId === listBirdId) {
       setSelectedListBirdId(null);
     }
 
-    markGardenDirty();
-    const payload = {
-      ...buildGardenPayloadFromSnapshot(),
-      customListBirds: nextCustom,
+    const payload: UserGardenPayload = {
       birds: nextBirds,
       records: nextRecords,
+      customListBirds: nextCustom,
       dailyArchives: nextArchives,
+      dexUnlockedSpecies: nextDex.dexUnlockedSpecies,
+      dexSeenSpecies: nextDex.dexSeenSpecies,
+      currentGardenDate: currentGardenDate ?? getKstDateKey(),
+      ...(userProfile ? { profile: userProfile } : {}),
     };
+
+    gardenSnapshotRef.current = {
+      ...gardenSnapshotRef.current,
+      gardenBirds: nextBirds,
+      birdRecords: nextRecords,
+      customListBirds: nextCustom,
+      dailyArchives: nextArchives,
+      dexUnlockedSpecies: nextDex.dexUnlockedSpecies,
+      dexSeenSpecies: nextDex.dexSeenSpecies,
+    };
+
     if (userId) {
       try {
         await persistGarden(userId, payload);
+        gardenDirtyRef.current = false;
         if (isSupabaseConfigured()) {
           await syncWeeklyRankingFromGarden(
             userId,
@@ -1299,10 +1318,12 @@ export default function Home() {
           );
         }
       } catch (error) {
+        markGardenDirty();
         reportGardenSyncError(error);
       }
     } else {
       guestSessionPayloadRef.current = payload;
+      gardenDirtyRef.current = false;
     }
   };
 
@@ -2047,17 +2068,39 @@ export default function Home() {
       speciesLabel.length > 0
         ? [...new Set([...dexUnlockedSpecies, speciesLabel])]
         : dexUnlockedSpecies;
+    const nextSeen =
+      speciesLabel.length > 0 ? [...new Set([...dexSeenSpecies, speciesLabel])] : dexSeenSpecies;
 
     const savedLat = pickedLocation?.lat ?? mapCenter.lat;
     const savedLng = pickedLocation?.lng ?? mapCenter.lng;
     saveRecordMapCoord(recordId, { lat: savedLat, lng: savedLng });
 
-    markGardenDirty();
     setGardenBirds(nextBirds);
     setBirdRecords(nextRecords);
     if (speciesLabel.length > 0) {
       setDexUnlockedSpecies(nextUnlocked);
+      setDexSeenSpecies(nextSeen);
     }
+
+    const savePayload: UserGardenPayload = {
+      birds: nextBirds,
+      records: nextRecords,
+      customListBirds,
+      dexUnlockedSpecies: nextUnlocked,
+      dexSeenSpecies: nextSeen,
+      currentGardenDate,
+      dailyArchives,
+      ...(userProfile ? { profile: userProfile } : {}),
+    };
+
+    gardenSnapshotRef.current = {
+      ...gardenSnapshotRef.current,
+      gardenBirds: nextBirds,
+      birdRecords: nextRecords,
+      dexUnlockedSpecies: nextUnlocked,
+      dexSeenSpecies: nextSeen,
+    };
+
     setIsBirdInfoScreenOpen(false);
     resetBirdFormDraft();
 
@@ -2073,6 +2116,9 @@ export default function Home() {
       let weeklyRankBanner: string | null = null;
       if (userId && isSupabaseConfigured()) {
         try {
+          await persistGarden(userId, savePayload);
+          gardenDirtyRef.current = false;
+          setGardenSyncError("");
           const rankingResult = await recordWeeklyDiscovery(
             userId,
             profileUsername.trim() || "탐험가",
@@ -2082,35 +2128,19 @@ export default function Home() {
           if (rankingResult) {
             weeklyRankBanner = weeklyRankBannerMessage(rankingResult);
           }
-        } catch {
-          // 랭킹 실패해도 짹짹짹 화면은 유지
+        } catch (error) {
+          markGardenDirty();
+          reportGardenSyncError(error);
         }
+      } else {
+        guestSessionPayloadRef.current = savePayload;
+        gardenDirtyRef.current = false;
       }
 
       if (weeklyRankBanner) {
         setRegistrationConfirm((prev) =>
           prev ? { ...prev, weeklyRankBanner } : prev
         );
-      }
-
-      if (userId) {
-        try {
-          await persistGarden(userId, {
-            ...buildGardenPayloadFromSnapshot(),
-            birds: nextBirds,
-            records: nextRecords,
-            dexUnlockedSpecies: nextUnlocked,
-          });
-        } catch (error) {
-          reportGardenSyncError(error);
-        }
-      } else {
-        guestSessionPayloadRef.current = {
-          ...buildGardenPayloadFromSnapshot(),
-          birds: nextBirds,
-          records: nextRecords,
-          dexUnlockedSpecies: nextUnlocked,
-        };
       }
     })();
   };
