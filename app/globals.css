@@ -982,9 +982,9 @@ select {
 
 /* 미해금 ??? 아이콘 (qm.png) */
 .bird-dex-card--locked .bird-dex-card-visual > span {
-  inset: 32% !important;
-  width: 36% !important;
-  height: 36% !important;
+  inset: 34% !important;
+  width: 32% !important;
+  height: 32% !important;
   margin: auto !important;
 }
 
