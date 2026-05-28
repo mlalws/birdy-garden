@@ -1009,8 +1009,8 @@ select {
 
 /* 미해금 실루엣(qm.png) — 해금된 참새 카드와 비슷한 체감 크기 */
 .bird-dex-card-img--locked-silhouette {
-  width: 52%;
-  height: 52%;
+  width: 60%;
+  height: 60%;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;

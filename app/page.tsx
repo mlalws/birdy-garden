@@ -788,14 +788,21 @@ export default function Home() {
 
   const refreshSharedListBirds = async (
     uid: string,
-    legacyFromPayload: { id: string; name: string; description: string; imageSrc: string; createdAt: string }[] = []
+    legacyFromPayload: { id: string; name: string; description: string; imageSrc: string; createdAt: string }[] = [],
+    options?: { backgroundGlobalSync?: boolean }
   ) => {
     if (!isSupabaseConfigured()) {
       setSharedListBirds([]);
       return [];
     }
     try {
-      await ensureGlobalSharedListSync();
+      if (options?.backgroundGlobalSync) {
+        void ensureGlobalSharedListSync().catch(() => {
+          // 백그라운드 동기화 실패는 목록 표시에 영향 주지 않음
+        });
+      } else {
+        await ensureGlobalSharedListSync();
+      }
       let shared = await fetchSharedListBirds();
       if (legacyFromPayload.length > 0) {
         shared = await migrateLegacyCustomListBirdsToShared(uid, legacyFromPayload, shared);
@@ -898,18 +905,26 @@ export default function Home() {
           profile: hydratedPayload.profile,
         };
         const migratedMerged = applyGardenPayload(merged);
-        await saveUserGarden(uid, migratedMerged);
         guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
         clearLegacyGuestStorage();
         applyProfileDisplay(merged.profile ?? null, options?.emailFallback);
         loadedGardenUserIdRef.current = uid;
         gardenDirtyRef.current = false;
-        await refreshSharedListBirds(uid, hydratedPayload.customListBirds ?? []);
+        setGardenSyncError("");
+        void (async () => {
+          try {
+            await saveUserGarden(uid, migratedMerged);
+            await refreshSharedListBirds(uid, hydratedPayload.customListBirds ?? [], {
+              backgroundGlobalSync: true,
+            });
+          } catch (error) {
+            reportGardenSyncError(error);
+          }
+        })();
         return;
       }
       const legacyCustom = hydratedPayload.customListBirds ?? [];
       const migratedPayload = applyGardenPayload(hydratedPayload);
-      await refreshSharedListBirds(uid, legacyCustom);
       const dexFromGarden = buildDexStateFromGarden(
         migratedPayload.records,
         migratedPayload.dailyArchives,
@@ -920,17 +935,23 @@ export default function Home() {
       applyProfileDisplay(migratedPayload.profile ?? null, options?.emailFallback);
       loadedGardenUserIdRef.current = uid;
       setGardenSyncError("");
+      gardenDirtyRef.current = false;
       const needsSave =
         didRollover ||
         needsRepairSave ||
         gardenPayloadNeedsMigration(hydratedPayload) ||
         legacyCustom.length > 0;
-      if (needsSave) {
-        await saveUserGarden(uid, { ...migratedPayload, customListBirds: [] });
-        gardenDirtyRef.current = false;
-      } else {
-        gardenDirtyRef.current = false;
-      }
+      void (async () => {
+        try {
+          if (needsSave) {
+            await saveUserGarden(uid, { ...migratedPayload, customListBirds: [] });
+          }
+          await refreshSharedListBirds(uid, legacyCustom, { backgroundGlobalSync: true });
+        } catch (error) {
+          markGardenDirty();
+          reportGardenSyncError(error);
+        }
+      })();
     } catch (error) {
       if (loadSeq !== gardenLoadSeqRef.current) {
         return;
@@ -986,8 +1007,9 @@ export default function Home() {
           const initialUserId = session?.user.id ?? null;
           setIsLoggedIn(!!session);
           setUserId(initialUserId);
+          setIsGardenHydrated(true);
           if (initialUserId) {
-            await loadGardenForUser(initialUserId, {
+            void loadGardenForUser(initialUserId, {
               mergeSessionGuestIfEmpty: true,
               emailFallback: session?.user.email,
             });
@@ -995,9 +1017,6 @@ export default function Home() {
             resetGuestGarden();
             setUserProfile(null);
             setProfileUsername("");
-          }
-          if (!unsubscribed) {
-            setIsGardenHydrated(true);
           }
         }
         const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
