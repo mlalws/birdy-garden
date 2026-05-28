@@ -202,6 +202,8 @@ export function GardenWorldView({
           const record = bird.recordId ? recordById.get(bird.recordId) : undefined;
           const inWater = resolveBirdInWater(bird, record);
           const birdSpriteSrc = record ? getSpriteSrcForPlacedBird(bird, record, inWater) : DEFAULT_SPRITE;
+          const isMagpie = record?.listBirdId === "magpie" || record?.speciesName === "까치";
+          const birdSpriteClassName = `bird-sprite-img${isMagpie ? " bird-sprite-img--magpie" : ""}`;
           const displaySize = Math.round(
             getBirdDisplaySize(bird, getSpeciesSizeScaleForRecord(record)) * birdSizeScale
           );
@@ -224,7 +226,7 @@ export function GardenWorldView({
                   aria-hidden
                 >
                   <span className="bird-sprite">
-                    <BirdSpriteImage src={birdSpriteSrc} className="bird-sprite-img" />
+                    <BirdSpriteImage src={birdSpriteSrc} className={birdSpriteClassName} />
                   </span>
                 </div>
               ) : (
@@ -237,7 +239,7 @@ export function GardenWorldView({
                   aria-expanded={isBubbleOpen}
                 >
                   <span className="bird-sprite">
-                    <BirdSpriteImage src={birdSpriteSrc} className="bird-sprite-img" />
+                    <BirdSpriteImage src={birdSpriteSrc} className={birdSpriteClassName} />
                   </span>
                 </button>
               )}

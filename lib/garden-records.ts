@@ -10,7 +10,6 @@ import {
 } from "@/lib/species-catalog";
 import type {
   BirdRecord,
-  CustomListBird,
   DailyGardenArchive,
   UserGardenPayload,
 } from "@/lib/supabase/garden";
@@ -178,16 +177,9 @@ const normalizeDexSpeciesLabel = (name: string): string | null => {
 export function buildDexStateFromGarden(
   records: BirdRecord[],
   archives: Record<string, DailyGardenArchive> | undefined,
-  customListBirds: CustomListBird[],
   previousSeen: string[] = []
 ): { dexUnlockedSpecies: string[]; dexSeenSpecies: string[] } {
   const activeLabels = new Set(collectSpeciesLabelsFromGarden(records, archives));
-  for (const entry of customListBirds) {
-    const name = entry.name.trim();
-    if (name) {
-      activeLabels.add(name);
-    }
-  }
   const dexUnlockedSpecies = [...activeLabels];
   const dexSeenSpecies = previousSeen.filter((name) => activeLabels.has(name.trim()));
   return { dexUnlockedSpecies, dexSeenSpecies };
@@ -280,7 +272,6 @@ export function migrateGardenPayload(payload: UserGardenPayload): UserGardenPayl
   const dex = buildDexStateFromGarden(
     records,
     dailyArchives,
-    customListBirds,
     migrateDexSeenSpecies(payload.dexSeenSpecies, records)
   );
   return {

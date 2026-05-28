@@ -239,6 +239,15 @@ select {
   object-position: center bottom;
 }
 
+/* 까치 원본 PNG 하단 여백 보정 */
+.bird-sprite-img--magpie {
+  transform: translateY(12%);
+}
+
+.bird--facing-left .bird-sprite-img--magpie {
+  transform: scaleX(-1) translateY(12%);
+}
+
 .bird--static {
   pointer-events: none;
   cursor: default;
@@ -973,9 +982,9 @@ select {
 
 /* 미해금 ??? 아이콘 (qm.png) */
 .bird-dex-card--locked .bird-dex-card-visual > span {
-  inset: 22% !important;
-  width: 56% !important;
-  height: 56% !important;
+  inset: 30% !important;
+  width: 40% !important;
+  height: 40% !important;
   margin: auto !important;
 }
 
@@ -992,8 +1001,8 @@ select {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 86%;
-  height: 86%;
+  width: 74%;
+  height: 74%;
   transform: translate(-50%, -50%);
   border-radius: 8px;
   overflow: hidden;
@@ -1004,7 +1013,9 @@ select {
 }
 
 .bird-dex-card-img {
-  object-fit: cover;
+  object-fit: contain;
+  padding: 4px;
+  box-sizing: border-box;
 }
 
 .bird-dex-card-img--uploaded {

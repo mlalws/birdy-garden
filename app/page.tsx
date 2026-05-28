@@ -908,11 +908,10 @@ export default function Home() {
       }
       const legacyCustom = hydratedPayload.customListBirds ?? [];
       const migratedPayload = applyGardenPayload(hydratedPayload);
-      const shared = await refreshSharedListBirds(uid, legacyCustom);
+      await refreshSharedListBirds(uid, legacyCustom);
       const dexFromGarden = buildDexStateFromGarden(
         migratedPayload.records,
         migratedPayload.dailyArchives,
-        shared,
         migratedPayload.dexSeenSpecies ?? []
       );
       setDexUnlockedSpecies(dexFromGarden.dexUnlockedSpecies);
@@ -1342,7 +1341,7 @@ export default function Home() {
       };
     }
 
-    const nextDex = buildDexStateFromGarden(nextRecords, nextArchives, nextCustom, dexSeenSpecies);
+    const nextDex = buildDexStateFromGarden(nextRecords, nextArchives, dexSeenSpecies);
 
     setSharedListBirds(nextCustom);
     setBirdRecords(nextRecords);
@@ -1499,7 +1498,6 @@ export default function Home() {
       const dexFromList = buildDexStateFromGarden(
         birdRecords,
         dailyArchives,
-        nextCustom,
         dexSeenSpecies
       );
       setDexUnlockedSpecies(dexFromList.dexUnlockedSpecies);
