@@ -980,14 +980,6 @@ select {
   background: linear-gradient(180deg, #faf5ee 0%, #ebe2d6 100%);
 }
 
-/* 미해금 ??? 아이콘 (qm.png) */
-.bird-dex-card--locked .bird-dex-card-visual > span {
-  inset: 34% !important;
-  width: 32% !important;
-  height: 32% !important;
-  margin: auto !important;
-}
-
 .bird-dex-card-visual {
   position: relative;
   width: 100%;
@@ -1010,6 +1002,20 @@ select {
 
 .bird-dex-card--locked .bird-dex-card-visual {
   background: linear-gradient(180deg, #dcd2c6 0%, #cfc3b5 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 미해금 실루엣(qm.png) — 해금된 참새 카드와 비슷한 체감 크기 */
+.bird-dex-card-img--locked-silhouette {
+  width: 52%;
+  height: 52%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: none;
 }
 
 .bird-dex-card-img {

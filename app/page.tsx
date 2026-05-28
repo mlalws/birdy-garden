@@ -3987,7 +3987,11 @@ export default function Home() {
                         <div key={entry.id} className="bird-dex-card bird-dex-card--locked">
                           <div className="bird-dex-card-visual">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <Image src={LOCKED_DEX_IMAGE} alt="" fill sizes="120px" className="bird-dex-card-img" />
+                            <img
+                              src={LOCKED_DEX_IMAGE}
+                              alt=""
+                              className="bird-dex-card-img bird-dex-card-img--locked-silhouette"
+                            />
                           </div>
                           <span className="bird-dex-card-name">???</span>
                         </div>
