@@ -982,9 +982,9 @@ select {
 
 /* 미해금 ??? 아이콘 (qm.png) */
 .bird-dex-card--locked .bird-dex-card-visual > span {
-  inset: 30% !important;
-  width: 40% !important;
-  height: 40% !important;
+  inset: 32% !important;
+  width: 36% !important;
+  height: 36% !important;
   margin: auto !important;
 }
 
@@ -1001,8 +1001,8 @@ select {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 74%;
-  height: 74%;
+  width: 86%;
+  height: 86%;
   transform: translate(-50%, -50%);
   border-radius: 8px;
   overflow: hidden;
@@ -1013,9 +1013,13 @@ select {
 }
 
 .bird-dex-card-img {
+  object-fit: cover;
+}
+
+/* 도감 카드에서 까치만 살짝 축소 */
+.bird-dex-card-img--magpie {
   object-fit: contain;
-  padding: 4px;
-  box-sizing: border-box;
+  transform: scale(0.84);
 }
 
 .bird-dex-card-img--uploaded {

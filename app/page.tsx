@@ -81,6 +81,7 @@ import {
   weeklyRankBannerMessage,
   type WeeklyRankingRow,
 } from "@/lib/supabase/ranking";
+import { logNorthStarEventOncePerWeek, NORTH_STAR_EVENT } from "@/lib/supabase/events";
 import {
   loadUserGarden,
   saveUserGarden,
@@ -1880,6 +1881,11 @@ export default function Home() {
   const openGardenBirdDetail = (birdId: string) => {
     setSelectedGardenBirdId(birdId);
     setGardenBirdDeleteConfirm(false);
+    if (userId && isSupabaseConfigured()) {
+      void logNorthStarEventOncePerWeek(userId, NORTH_STAR_EVENT.GARDEN_INTERACTION).catch(() => {
+        // 이벤트 로그 실패는 UX에 영향 주지 않음
+      });
+    }
   };
 
   const requestGardenBirdDelete = () => {
@@ -2257,6 +2263,9 @@ export default function Home() {
             savePayload.dailyArchives,
             profileAvatarUrl
           );
+          await logNorthStarEventOncePerWeek(userId, NORTH_STAR_EVENT.BIRD_RECORD_COMPLETED).catch(() => {
+            // 이벤트 로그 실패는 저장 흐름에 영향 주지 않음
+          });
         } catch (error) {
           markGardenDirty();
           reportGardenSyncError(error);
@@ -3959,7 +3968,7 @@ export default function Home() {
                                 <img
                                   src={entry.photoUrl}
                                   alt={entry.name}
-                                  className="bird-dex-card-img bird-dex-card-img--uploaded"
+                                  className={`bird-dex-card-img bird-dex-card-img--uploaded${entry.name === "까치" ? " bird-dex-card-img--magpie" : ""}`}
                                 />
                               ) : (
                                 <Image
@@ -3967,7 +3976,7 @@ export default function Home() {
                                   alt={entry.name}
                                   fill
                                   sizes="120px"
-                                  className="bird-dex-card-img"
+                                  className={`bird-dex-card-img${entry.name === "까치" ? " bird-dex-card-img--magpie" : ""}`}
                                 />
                               )}
                             </div>
