@@ -70,6 +70,7 @@ import {
   gardenPayloadNeedsMigration,
   buildDexStateFromGarden,
   migrateGardenPayload,
+  restoreGardenPayload,
 } from "@/lib/garden-records";
 import { formatKstWeekLabel, formatKstWeekPeriod, getKstWeekKey } from "@/lib/garden-weekly";
 import { getGardenStorageErrorMessage } from "@/lib/supabase/garden-errors";
@@ -883,9 +884,9 @@ export default function Home() {
     gardenLoadCompleteRef.current = false;
     setIsGardenSyncing(true);
     try {
-      const loaded = repairGardenPayloadArchives(await loadUserGarden(uid));
+      const loaded = restoreGardenPayload(repairGardenPayloadArchives(await loadUserGarden(uid)));
       const { payload: payloadAfterRollover, didRollover } = applyGardenDayRollover(loaded);
-      const hydratedPayload = repairGardenPayloadArchives(payloadAfterRollover);
+      const hydratedPayload = restoreGardenPayload(repairGardenPayloadArchives(payloadAfterRollover));
       if (loadSeq !== gardenLoadSeqRef.current) {
         return;
       }
@@ -929,13 +930,6 @@ export default function Home() {
       }
       const legacyCustom = hydratedPayload.customListBirds ?? [];
       const migratedPayload = applyGardenPayload(hydratedPayload);
-      const dexFromGarden = buildDexStateFromGarden(
-        migratedPayload.records,
-        migratedPayload.dailyArchives,
-        migratedPayload.dexSeenSpecies ?? []
-      );
-      setDexUnlockedSpecies(dexFromGarden.dexUnlockedSpecies);
-      setDexSeenSpecies(dexFromGarden.dexSeenSpecies);
       applyProfileDisplay(migratedPayload.profile ?? null, options?.emailFallback);
       loadedGardenUserIdRef.current = uid;
       gardenLoadCompleteRef.current = true;
@@ -945,7 +939,8 @@ export default function Home() {
         didRollover ||
         needsRepairSave ||
         gardenPayloadNeedsMigration(hydratedPayload) ||
-        legacyCustom.length > 0;
+        legacyCustom.length > 0 ||
+        JSON.stringify(loaded) !== JSON.stringify(hydratedPayload);
       void (async () => {
         try {
           if (needsSave) {

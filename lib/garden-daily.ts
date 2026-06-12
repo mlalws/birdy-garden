@@ -291,5 +291,5 @@ export function dateKeyHasGarden(
   live: { birds: PlacedBird[]; records: BirdRecord[] }
 ): boolean {
   const snapshot = resolveDaySnapshot(dateKey, archives, live);
-  return !!snapshot && snapshot.birds.length > 0;
+  return !!snapshot && (snapshot.birds.length > 0 || snapshot.records.length > 0);
 }

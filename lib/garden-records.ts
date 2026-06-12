@@ -1,5 +1,5 @@
 import { getRecordSpeciesLabel } from "@/lib/garden-daily";
-import { normalizePlacedBirds } from "@/lib/garden-birds";
+import { createGardenBirds, normalizePlacedBirds } from "@/lib/garden-birds";
 import {
   KNOWN_SPECIES_NAME_SET,
   LIST_SPECIES_BY_ID,
@@ -11,6 +11,7 @@ import {
 import type {
   BirdRecord,
   DailyGardenArchive,
+  PlacedBird,
   UserGardenPayload,
 } from "@/lib/supabase/garden";
 
@@ -185,6 +186,83 @@ export function buildDexStateFromGarden(
   return { dexUnlockedSpecies, dexSeenSpecies };
 }
 
+function rebuildBirdsForRecords(
+  records: BirdRecord[],
+  existingBirds: PlacedBird[],
+  offsetStart = 0
+): PlacedBird[] {
+  const birds = [...existingBirds];
+  let offset = offsetStart;
+
+  for (const record of records) {
+    const migrated = migrateBirdRecord(record);
+    const linked = birds.filter((bird) => bird.recordId === migrated.id);
+    const targetCount = Math.max(1, migrated.count);
+    if (linked.length >= targetCount) {
+      continue;
+    }
+
+    const need = targetCount - linked.length;
+    const created = createGardenBirds(offset, migrated.id, {
+      listBirdId: migrated.listBirdId,
+      speciesName: migrated.speciesName ?? migrated.name,
+      ...(speciesUsesSexSplit(migrated.listBirdId)
+        ? {
+            maleCount: Math.max(0, (migrated.maleCount ?? migrated.count) - linked.filter((b) => b.sex === "male").length),
+            femaleCount: Math.max(
+              0,
+              (migrated.femaleCount ?? 0) - linked.filter((b) => b.sex === "female").length
+            ),
+          }
+        : { count: need }),
+    });
+    birds.push(...created.slice(0, need));
+    offset += need;
+  }
+
+  return normalizePlacedBirds(birds, records);
+}
+
+/** records는 남아 있는데 birds만 비어 있을 때 정원·캘린더·도감 복구 */
+export function restoreGardenPayload(payload: UserGardenPayload): UserGardenPayload {
+  const records = migrateBirdRecords(payload.records);
+  let archives = migrateArchives(payload.dailyArchives) ?? {};
+
+  for (const [dateKey, archive] of Object.entries(archives)) {
+    const archiveRecords = migrateBirdRecords(archive.records);
+    if (archiveRecords.length > 0 && archive.birds.length === 0) {
+      archives = {
+        ...archives,
+        [dateKey]: {
+          ...archive,
+          records: archiveRecords,
+          birds: rebuildBirdsForRecords(archiveRecords, archive.birds),
+        },
+      };
+    }
+  }
+
+  let birds = payload.birds;
+  if (records.length > 0 && birds.length === 0) {
+    birds = rebuildBirdsForRecords(records, birds);
+  }
+
+  const labelsFromGarden = collectSpeciesLabelsFromGarden(records, archives);
+  const dexUnlockedSpecies = [
+    ...new Set([...(payload.dexUnlockedSpecies ?? []), ...labelsFromGarden]),
+  ];
+  const dexSeenSpecies = [...new Set([...(payload.dexSeenSpecies ?? []), ...dexUnlockedSpecies])];
+
+  return {
+    ...payload,
+    birds: normalizePlacedBirds(birds, records),
+    records,
+    dailyArchives: archives,
+    dexUnlockedSpecies,
+    dexSeenSpecies,
+  };
+}
+
 export function collectSpeciesLabelsFromGarden(
   records: BirdRecord[],
   archives: Record<string, DailyGardenArchive> | undefined
@@ -266,22 +344,16 @@ function normalizeArchiveBirds(archives: Record<string, DailyGardenArchive> | un
 }
 
 export function migrateGardenPayload(payload: UserGardenPayload): UserGardenPayload {
-  const records = migrateBirdRecords(payload.records);
-  const dailyArchives = normalizeArchiveBirds(migrateArchives(payload.dailyArchives));
-  const customListBirds = payload.customListBirds ?? [];
-  const dex = buildDexStateFromGarden(
-    records,
-    dailyArchives,
-    migrateDexSeenSpecies(payload.dexSeenSpecies, records)
-  );
+  const restored = restoreGardenPayload(payload);
+  const records = restored.records;
+  const dailyArchives = normalizeArchiveBirds(restored.dailyArchives);
+  const customListBirds = restored.customListBirds ?? [];
   return {
-    ...payload,
+    ...restored,
     records,
-    birds: normalizePlacedBirds(payload.birds, records),
+    birds: normalizePlacedBirds(restored.birds, records),
     dailyArchives,
     customListBirds,
-    dexUnlockedSpecies: dex.dexUnlockedSpecies,
-    dexSeenSpecies: dex.dexSeenSpecies,
   };
 }
 
