@@ -73,6 +73,53 @@ export type UserGardenPayload = {
 
 const EMPTY_PAYLOAD: UserGardenPayload = { birds: [], records: [], dexUnlockedSpecies: [], dexSeenSpecies: [] };
 
+export type GardenPayloadCounts = {
+  liveBirds: number;
+  liveRecords: number;
+  archiveDays: number;
+  archiveBirds: number;
+  archiveRecords: number;
+};
+
+export function countGardenPayloadItems(payload: UserGardenPayload): GardenPayloadCounts {
+  const archives = Object.values(payload.dailyArchives ?? {});
+  return {
+    liveBirds: payload.birds.length,
+    liveRecords: payload.records.length,
+    archiveDays: archives.length,
+    archiveBirds: archives.reduce((sum, archive) => sum + archive.birds.length, 0),
+    archiveRecords: archives.reduce((sum, archive) => sum + archive.records.length, 0),
+  };
+}
+
+export function isEmptyGardenPayload(payload: UserGardenPayload): boolean {
+  const counts = countGardenPayloadItems(payload);
+  return (
+    counts.liveBirds === 0 &&
+    counts.liveRecords === 0 &&
+    counts.archiveDays === 0 &&
+    counts.archiveBirds === 0 &&
+    counts.archiveRecords === 0
+  );
+}
+
+/** 빈 스냅샷·오늘 정원 전체 삭제 등 사고성 저장인지 (의도적 개별 삭제는 허용) */
+export function isRegressiveGardenSave(
+  existing: UserGardenPayload,
+  incoming: UserGardenPayload
+): boolean {
+  if (isEmptyGardenPayload(incoming) && !isEmptyGardenPayload(existing)) {
+    return true;
+  }
+
+  const ex = countGardenPayloadItems(existing);
+  const inc = countGardenPayloadItems(incoming);
+  const hadLiveGarden = ex.liveBirds > 0 || ex.liveRecords > 0;
+  const wipedLiveGarden = inc.liveBirds === 0 && inc.liveRecords === 0;
+
+  return hadLiveGarden && wipedLiveGarden && inc.archiveDays >= ex.archiveDays;
+}
+
 function normalizePayload(raw: unknown): UserGardenPayload {
   if (!raw || typeof raw !== "object") {
     return { ...EMPTY_PAYLOAD };
@@ -233,6 +280,24 @@ export async function loadUserGarden(userId: string): Promise<UserGardenPayload>
  * 예전 union 병합은 목록·도감 삭제가 새로고침 후 되살아나는 원인이었습니다.
  */
 export function mergeGardenPayload(existing: UserGardenPayload, incoming: UserGardenPayload): UserGardenPayload {
+  if (isRegressiveGardenSave(existing, incoming)) {
+    return {
+      birds: incoming.birds.length > 0 ? incoming.birds : existing.birds,
+      records: incoming.records.length > 0 ? incoming.records : existing.records,
+      customListBirds: incoming.customListBirds ?? existing.customListBirds ?? [],
+      dexUnlockedSpecies: [
+        ...new Set([...(existing.dexUnlockedSpecies ?? []), ...(incoming.dexUnlockedSpecies ?? [])]),
+      ],
+      dexSeenSpecies: [...new Set([...(existing.dexSeenSpecies ?? []), ...(incoming.dexSeenSpecies ?? [])])],
+      profile: incoming.profile ?? existing.profile,
+      currentGardenDate: incoming.currentGardenDate ?? existing.currentGardenDate ?? undefined,
+      dailyArchives: {
+        ...(existing.dailyArchives ?? {}),
+        ...(incoming.dailyArchives ?? {}),
+      },
+    };
+  }
+
   return {
     birds: incoming.birds,
     records: incoming.records,
@@ -254,12 +319,16 @@ export async function saveUserGarden(userId: string, payload: UserGardenPayload)
   let toSave = payload;
   try {
     const existing = await loadUserGarden(userId);
-    const hasExistingData =
-      existing.birds.length > 0 ||
-      existing.records.length > 0 ||
-      Object.keys(existing.dailyArchives ?? {}).length > 0;
+    const hasExistingData = !isEmptyGardenPayload(existing);
+    if (hasExistingData && isEmptyGardenPayload(payload)) {
+      // 새로고침 직후 빈 스냅샷이 서버 기록을 지우는 사고 방지
+      return;
+    }
     if (hasExistingData) {
       toSave = mergeGardenPayload(existing, payload);
+      if (isRegressiveGardenSave(existing, toSave)) {
+        return;
+      }
     }
   } catch {
     // 신규 사용자 등 — incoming 그대로 저장

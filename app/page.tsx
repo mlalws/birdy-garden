@@ -382,6 +382,7 @@ export default function Home() {
   const guestSessionPayloadRef = useRef<UserGardenPayload>(EMPTY_GARDEN_PAYLOAD);
   const gardenLoadSeqRef = useRef(0);
   const gardenDirtyRef = useRef(false);
+  const gardenLoadCompleteRef = useRef(false);
   const loadedGardenUserIdRef = useRef<string | null>(null);
   const gardenSnapshotRef = useRef({
     gardenBirds,
@@ -729,6 +730,7 @@ export default function Home() {
     applyGardenPayload(EMPTY_GARDEN_PAYLOAD);
     setSharedListBirds([]);
     guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
+    gardenLoadCompleteRef.current = true;
     clearLegacyGuestStorage();
   };
 
@@ -878,6 +880,7 @@ export default function Home() {
     }
 
     const loadSeq = ++gardenLoadSeqRef.current;
+    gardenLoadCompleteRef.current = false;
     setIsGardenSyncing(true);
     try {
       const loaded = repairGardenPayloadArchives(await loadUserGarden(uid));
@@ -909,6 +912,7 @@ export default function Home() {
         clearLegacyGuestStorage();
         applyProfileDisplay(merged.profile ?? null, options?.emailFallback);
         loadedGardenUserIdRef.current = uid;
+        gardenLoadCompleteRef.current = true;
         gardenDirtyRef.current = false;
         setGardenSyncError("");
         void (async () => {
@@ -934,6 +938,7 @@ export default function Home() {
       setDexSeenSpecies(dexFromGarden.dexSeenSpecies);
       applyProfileDisplay(migratedPayload.profile ?? null, options?.emailFallback);
       loadedGardenUserIdRef.current = uid;
+      gardenLoadCompleteRef.current = true;
       setGardenSyncError("");
       gardenDirtyRef.current = false;
       const needsSave =
@@ -1007,22 +1012,26 @@ export default function Home() {
           const initialUserId = session?.user.id ?? null;
           setIsLoggedIn(!!session);
           setUserId(initialUserId);
-          setIsGardenHydrated(true);
           if (initialUserId) {
-            void loadGardenForUser(initialUserId, {
+            await loadGardenForUser(initialUserId, {
               mergeSessionGuestIfEmpty: true,
               emailFallback: session?.user.email,
             });
           } else {
             resetGuestGarden();
+            gardenLoadCompleteRef.current = true;
             setUserProfile(null);
             setProfileUsername("");
+          }
+          if (!unsubscribed) {
+            setIsGardenHydrated(true);
           }
         }
         const { data: listener } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
           setIsLoggedIn(!!nextSession);
           if (!nextSession) {
             loadedGardenUserIdRef.current = null;
+            gardenLoadCompleteRef.current = false;
             gardenDirtyRef.current = false;
             setIsProfileOpen(false);
             setIsNicknameEditing(false);
@@ -1106,7 +1115,7 @@ export default function Home() {
   }, [isRankingOpen, isLoggedIn]);
 
   const flushGardenSaveNow = async (uid: string) => {
-    if (!gardenDirtyRef.current) {
+    if (!gardenDirtyRef.current || !gardenLoadCompleteRef.current) {
       return;
     }
     try {
@@ -1868,6 +1877,9 @@ export default function Home() {
   };
 
   const persistGarden = async (uid: string, payload: UserGardenPayload) => {
+    if (!gardenLoadCompleteRef.current) {
+      return;
+    }
     await saveUserGarden(uid, payload);
     loadedGardenUserIdRef.current = uid;
     gardenDirtyRef.current = false;
