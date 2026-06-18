@@ -69,12 +69,14 @@ import {
   collectSpeciesLabelsFromGarden,
   gardenPayloadNeedsMigration,
   buildDexStateFromGarden,
+  mergeGuestGardenIntoPayload,
   migrateGardenPayload,
   restoreGardenPayload,
 } from "@/lib/garden-records";
 import { formatKstWeekLabel, formatKstWeekPeriod, getKstWeekKey } from "@/lib/garden-weekly";
 import { getGardenStorageErrorMessage } from "@/lib/supabase/garden-errors";
 import {
+  fetchLatestNicknameForUser,
   fetchWeeklyLeaderboard,
   rankFromSortedRows,
   recordWeeklyDiscovery,
@@ -82,8 +84,11 @@ import {
   weeklyRankBannerMessage,
   type WeeklyRankingRow,
 } from "@/lib/supabase/ranking";
+import { signInWithBestGardenAccount } from "@/lib/supabase/auth-garden-login";
+import { mergeSiblingGardensIntoPayload } from "@/lib/supabase/garden-siblings";
 import { logNorthStarEventOncePerWeek, NORTH_STAR_EVENT } from "@/lib/supabase/events";
 import {
+  isEmptyGardenPayload,
   loadUserGarden,
   saveUserGarden,
   type BirdRecord,
@@ -100,6 +105,12 @@ import {
   updateSharedListBird,
   type SharedListBird,
 } from "@/lib/supabase/shared-list-birds";
+import {
+  authEmailsForLogin,
+  displayIdFromAuthEmail,
+  normalizeAuthEmail,
+  sanitizeAuthLocalId,
+} from "@/lib/auth-identity";
 
 type MenuItem = {
   label: string;
@@ -238,21 +249,6 @@ type RegistrationConfirmPayload = {
   weeklyRankBanner?: string | null;
 };
 
-/** Supabase가 거부하지 않는 가짜 이메일 도메인 (하이픈 없는 FQDN) */
-const AUTH_EMAIL_DOMAIN = "users.birdygarden.app";
-const LEGACY_AUTH_EMAIL_DOMAINS = ["users.birdy-garden.app", "birdy.local"] as const;
-
-const displayIdFromAuthEmail = (email: string | undefined | null) => {
-  if (!email) {
-    return "";
-  }
-  const at = email.indexOf("@");
-  if (at <= 0) {
-    return email;
-  }
-  return email.slice(0, at);
-};
-
 const SPECIES_IMAGE_BY_NAME = new Map(KNOWN_DEX_SPECIES.map((item) => [item.name, item.imageSrc]));
 
 const getSpeciesFallbackImageSrc = (speciesName: string) =>
@@ -291,8 +287,9 @@ const collectAllMapRecords = (
 };
 
 export default function Home() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [isBirdListOpen, setIsBirdListOpen] = useState(false);
+  const [birdListSearchQuery, setBirdListSearchQuery] = useState("");
   const [selectedListBirdId, setSelectedListBirdId] = useState<string | null>(null);
   const [isBirdInfoScreenOpen, setIsBirdInfoScreenOpen] = useState(false);
   const [birdRegistrationMode, setBirdRegistrationMode] = useState<"listed" | "unlisted">("listed");
@@ -385,6 +382,7 @@ export default function Home() {
   const gardenDirtyRef = useRef(false);
   const gardenLoadCompleteRef = useRef(false);
   const loadedGardenUserIdRef = useRef<string | null>(null);
+  const pendingGardenSaveRef = useRef<{ uid: string; payload: UserGardenPayload } | null>(null);
   const gardenSnapshotRef = useRef({
     gardenBirds,
     birdRecords,
@@ -410,6 +408,22 @@ export default function Home() {
     ],
     [sharedListBirds]
   );
+
+  const filteredBirdListItems = useMemo(() => {
+    const query = birdListSearchQuery.trim().toLowerCase();
+    if (!query) {
+      return displayBirdListItems;
+    }
+    return displayBirdListItems.filter((item) => {
+      if (item.isPlaceholder) {
+        return false;
+      }
+      if (item.name.toLowerCase().includes(query)) {
+        return true;
+      }
+      return (item.listBlurb ?? "").toLowerCase().includes(query);
+    });
+  }, [birdListSearchQuery, displayBirdListItems]);
 
   const todayDateKey = getKstDateKey();
 
@@ -599,6 +613,32 @@ export default function Home() {
     }
     setUserProfile(null);
     setProfileUsername(displayIdFromAuthEmail(email));
+  };
+
+  const resolveProfileForUser = async (
+    uid: string,
+    payload: UserGardenPayload,
+    email?: string | null
+  ): Promise<{ profile: UserProfile | null; recoveredFromRanking: boolean }> => {
+    if (payload.profile?.nickname) {
+      applyProfileDisplay(payload.profile, email);
+      return { profile: payload.profile, recoveredFromRanking: false };
+    }
+
+    const rankNickname = await fetchLatestNicknameForUser(uid);
+    if (rankNickname) {
+      const profile: UserProfile = {
+        nickname: rankNickname,
+        nicknameEditCount: payload.profile?.nicknameEditCount ?? 0,
+        nicknameLastChangedAt: payload.profile?.nicknameLastChangedAt ?? null,
+        avatarUrl: payload.profile?.avatarUrl ?? null,
+      };
+      applyProfileDisplay(profile, email);
+      return { profile, recoveredFromRanking: true };
+    }
+
+    applyProfileDisplay(payload.profile ?? null, email);
+    return { profile: payload.profile ?? null, recoveredFromRanking: false };
   };
 
   const menuItems = useMemo<MenuItem[]>(
@@ -881,6 +921,8 @@ export default function Home() {
     }
 
     const loadSeq = ++gardenLoadSeqRef.current;
+    const loadStartedDirty = gardenDirtyRef.current;
+    const pendingLocalAtLoad = loadStartedDirty ? buildGardenPayloadFromSnapshot() : null;
     gardenLoadCompleteRef.current = false;
     setIsGardenSyncing(true);
     try {
@@ -897,54 +939,68 @@ export default function Home() {
         hydratedPayload.birds.length !== payloadAfterRollover.birds.length ||
         hydratedPayload.records.length !== payloadAfterRollover.records.length;
 
-      const sessionGuest = options?.mergeSessionGuestIfEmpty ? guestSessionPayloadRef.current : EMPTY_GARDEN_PAYLOAD;
-      if (hydratedPayload.birds.length === 0 && sessionGuest.birds.length > 0) {
-        const merged: UserGardenPayload = {
-          birds: sessionGuest.birds,
-          records: sessionGuest.records,
-          dexUnlockedSpecies: sessionGuest.dexUnlockedSpecies ?? sessionGuest.dexSeenSpecies ?? [],
-          dexSeenSpecies: sessionGuest.dexSeenSpecies ?? [],
-          dailyArchives: { ...hydratedPayload.dailyArchives, ...sessionGuest.dailyArchives },
-          currentGardenDate: hydratedPayload.currentGardenDate ?? getKstDateKey(),
-          profile: hydratedPayload.profile,
-        };
-        const migratedMerged = applyGardenPayload(merged);
-        guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
-        clearLegacyGuestStorage();
-        applyProfileDisplay(merged.profile ?? null, options?.emailFallback);
-        loadedGardenUserIdRef.current = uid;
-        gardenLoadCompleteRef.current = true;
-        gardenDirtyRef.current = false;
-        setGardenSyncError("");
-        void (async () => {
-          try {
-            await saveUserGarden(uid, migratedMerged);
-            await refreshSharedListBirds(uid, hydratedPayload.customListBirds ?? [], {
-              backgroundGlobalSync: true,
-            });
-          } catch (error) {
-            reportGardenSyncError(error);
-          }
-        })();
+      const { payload: mergedSiblings, didMerge: mergedSiblingAccounts } = await mergeSiblingGardensIntoPayload(
+        uid,
+        hydratedPayload
+      );
+      if (loadSeq !== gardenLoadSeqRef.current) {
         return;
       }
-      const legacyCustom = hydratedPayload.customListBirds ?? [];
-      const migratedPayload = applyGardenPayload(hydratedPayload);
-      applyProfileDisplay(migratedPayload.profile ?? null, options?.emailFallback);
+
+      const sessionGuest = options?.mergeSessionGuestIfEmpty ? guestSessionPayloadRef.current : EMPTY_GARDEN_PAYLOAD;
+      const mergedGuest =
+        options?.mergeSessionGuestIfEmpty && !isEmptyGardenPayload(sessionGuest)
+          ? mergeGuestGardenIntoPayload(mergedSiblings, sessionGuest)
+          : mergedSiblings;
+
+      if (options?.mergeSessionGuestIfEmpty && !isEmptyGardenPayload(sessionGuest)) {
+        guestSessionPayloadRef.current = EMPTY_GARDEN_PAYLOAD;
+        clearLegacyGuestStorage();
+      }
+
+      const legacyCustom = mergedGuest.customListBirds ?? [];
+      const payloadWithPendingLocal =
+        pendingLocalAtLoad && !isEmptyGardenPayload(pendingLocalAtLoad)
+          ? mergeGuestGardenIntoPayload(mergedGuest, pendingLocalAtLoad)
+          : mergedGuest;
+      const hadPendingLocalMerge =
+        JSON.stringify(payloadWithPendingLocal) !== JSON.stringify(mergedGuest);
+      const migratedPayload = applyGardenPayload(payloadWithPendingLocal);
+      const { profile: resolvedProfile, recoveredFromRanking } = await resolveProfileForUser(
+        uid,
+        migratedPayload,
+        options?.emailFallback
+      );
       loadedGardenUserIdRef.current = uid;
       gardenLoadCompleteRef.current = true;
       setGardenSyncError("");
-      gardenDirtyRef.current = false;
+      gardenDirtyRef.current = loadStartedDirty || hadPendingLocalMerge;
       const needsSave =
         didRollover ||
         needsRepairSave ||
         gardenPayloadNeedsMigration(hydratedPayload) ||
         legacyCustom.length > 0 ||
-        JSON.stringify(loaded) !== JSON.stringify(hydratedPayload);
+        JSON.stringify(loaded) !== JSON.stringify(hydratedPayload) ||
+        JSON.stringify(mergedGuest) !== JSON.stringify(hydratedPayload) ||
+        mergedSiblingAccounts ||
+        recoveredFromRanking ||
+        hadPendingLocalMerge;
       void (async () => {
         try {
-          if (needsSave) {
-            await saveUserGarden(uid, { ...migratedPayload, customListBirds: [] });
+          const pending = pendingGardenSaveRef.current;
+          if (pending?.uid === uid) {
+            pendingGardenSaveRef.current = null;
+            await saveUserGarden(uid, pending.payload);
+            gardenDirtyRef.current = false;
+          } else if (needsSave) {
+            await saveUserGarden(uid, {
+              ...migratedPayload,
+              customListBirds: [],
+              ...(resolvedProfile ? { profile: resolvedProfile } : {}),
+            });
+            if (!loadStartedDirty) {
+              gardenDirtyRef.current = false;
+            }
           }
           await refreshSharedListBirds(uid, legacyCustom, { backgroundGlobalSync: true });
         } catch (error) {
@@ -1109,12 +1165,18 @@ export default function Home() {
     void loadWeeklyRanking();
   }, [isRankingOpen, isLoggedIn]);
 
-  const flushGardenSaveNow = async (uid: string) => {
-    if (!gardenDirtyRef.current || !gardenLoadCompleteRef.current) {
+  const flushGardenSaveNow = async (uid: string, options?: { force?: boolean }) => {
+    if (!gardenDirtyRef.current) {
+      return;
+    }
+    const payload = buildGardenPayloadFromSnapshot();
+    if (!options?.force && !gardenLoadCompleteRef.current) {
+      pendingGardenSaveRef.current = { uid, payload };
       return;
     }
     try {
-      await saveUserGarden(uid, buildGardenPayloadFromSnapshot());
+      await saveUserGarden(uid, payload);
+      pendingGardenSaveRef.current = null;
       gardenDirtyRef.current = false;
     } catch (error) {
       reportGardenSyncError(error);
@@ -1150,10 +1212,10 @@ export default function Home() {
 
   useEffect(() => {
     const onPageHide = () => {
-      if (!userId) {
+      if (!userId || !gardenDirtyRef.current) {
         return;
       }
-      void flushGardenSaveNow(userId);
+      void flushGardenSaveNow(userId, { force: true });
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -1250,12 +1312,14 @@ export default function Home() {
   const openBirdList = () => {
     setIsBirdListOpen(true);
     setSelectedListBirdId(null);
+    setBirdListSearchQuery("");
   };
 
   const closeBirdList = () => {
     setIsBirdListOpen(false);
     setSelectedListBirdId(null);
     setCustomListDeleteConfirmId(null);
+    setBirdListSearchQuery("");
   };
 
   const openBirdRegistration = (opts?: {
@@ -1871,14 +1935,18 @@ export default function Home() {
     }
   };
 
-  const persistGarden = async (uid: string, payload: UserGardenPayload) => {
+  const persistGarden = async (uid: string, payload: UserGardenPayload): Promise<boolean> => {
     if (!gardenLoadCompleteRef.current) {
-      return;
+      pendingGardenSaveRef.current = { uid, payload };
+      gardenDirtyRef.current = true;
+      return false;
     }
     await saveUserGarden(uid, payload);
+    pendingGardenSaveRef.current = null;
     loadedGardenUserIdRef.current = uid;
     gardenDirtyRef.current = false;
     setGardenSyncError("");
+    return true;
   };
 
   const reportGardenSyncError = (error: unknown) => {
@@ -2270,9 +2338,10 @@ export default function Home() {
       let weeklyRankBanner: string | null = null;
       if (userId && isSupabaseConfigured()) {
         try {
-          await persistGarden(userId, savePayload);
-          gardenDirtyRef.current = false;
-          setGardenSyncError("");
+          const saved = await persistGarden(userId, savePayload);
+          if (saved) {
+            setGardenSyncError("");
+          }
           const rankingResult = await recordWeeklyDiscovery(
             userId,
             profileUsername.trim() || "탐험가",
@@ -2486,8 +2555,6 @@ export default function Home() {
     resetAuthForm();
   };
 
-  const sanitizeAuthId = (id: string) => id.trim().toLowerCase().replace(/[^a-z0-9_]/g, "");
-
   const validateAuthEmailInput = (value: string): string | null => {
     const trimmed = value.trim();
     if (!trimmed) {
@@ -2499,35 +2566,10 @@ export default function Home() {
       }
       return null;
     }
-    if (sanitizeAuthId(trimmed).length < 2) {
+    if (sanitizeAuthLocalId(trimmed).length < 2) {
       return "이메일을 입력해 주세요.";
     }
     return null;
-  };
-
-  const normalizeAuthEmail = (idOrEmail: string) => {
-    const trimmed = idOrEmail.trim();
-    if (trimmed.includes("@")) {
-      return trimmed.toLowerCase();
-    }
-    const local = sanitizeAuthId(trimmed);
-    if (!local) {
-      throw new Error("INVALID_AUTH_ID");
-    }
-    return `${local}@${AUTH_EMAIL_DOMAIN}`;
-  };
-
-  const authEmailsForLogin = (idOrEmail: string) => {
-    const trimmed = idOrEmail.trim();
-    if (trimmed.includes("@")) {
-      return [trimmed.toLowerCase()];
-    }
-    const local = sanitizeAuthId(trimmed);
-    if (!local) {
-      return [];
-    }
-    const domains = [AUTH_EMAIL_DOMAIN, ...LEGACY_AUTH_EMAIL_DOMAINS];
-    return domains.map((domain) => `${local}@${domain}`);
   };
 
   const mapAuthErrorMessage = (message: string) => {
@@ -2611,22 +2653,9 @@ export default function Home() {
         return;
       }
 
-      let signedIn = false;
-      let lastError = "";
-      for (const email of emails) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password: loginPassword,
-        });
-        if (!error) {
-          signedIn = true;
-          break;
-        }
-        lastError = error.message;
-      }
-
+      const signedIn = await signInWithBestGardenAccount(supabase, emails, loginPassword);
       if (!signedIn) {
-        setLoginMessage(`로그인 실패: ${mapAuthErrorMessage(lastError)}`);
+        setLoginMessage("로그인 실패: 이메일 또는 비밀번호가 맞지 않아요.");
         return;
       }
 
@@ -2933,8 +2962,22 @@ export default function Home() {
               </button>
             </header>
 
+            <div className="bird-list-search-wrap">
+              <input
+                type="search"
+                className="bird-list-search"
+                placeholder="조류 이름 검색"
+                value={birdListSearchQuery}
+                onChange={(event) => setBirdListSearchQuery(event.target.value)}
+                aria-label="조류 이름 검색"
+              />
+            </div>
+
             <div className="bird-list-scroll">
-              {displayBirdListItems.map((item) =>
+              {filteredBirdListItems.length === 0 ? (
+                <p className="bird-list-empty">검색 결과가 없어요.</p>
+              ) : null}
+              {filteredBirdListItems.map((item) =>
                 item.isPlaceholder ? (
                   <div key={item.id} className="bird-list-card bird-list-card--placeholder" aria-hidden>
                     <div className="bird-list-thumb bird-list-thumb--muted">
